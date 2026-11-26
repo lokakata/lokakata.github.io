@@ -1,0 +1,1798 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1C1411">
+<title>Loka Kata — Tebak Budaya Nusantara</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Firebase v10 Compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --ebony:#1C1411;
+    --ebony-2:#2A1E18;
+    --parchment:#FAF3E0;
+    --gold:#D97706;
+    --terracotta:#9A3412;
+    --leaf:#15803D;
+    --charcoal:#3F3A36;
+    --tile-border:#5B4636;
+  }
+  html,body{background:var(--ebony);color:var(--parchment);font-family:'Georgia','Times New Roman',serif;-webkit-tap-highlight-color:transparent;}
+  body{
+    min-height:100vh;
+    background-color:var(--ebony);
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%23D97706' stroke-width='1' opacity='.13'%3E%3Cellipse cx='24' cy='12' rx='7' ry='12'/%3E%3Cellipse cx='24' cy='36' rx='7' ry='12'/%3E%3Cellipse cx='12' cy='24' rx='12' ry='7'/%3E%3Cellipse cx='36' cy='24' rx='12' ry='7'/%3E%3Ccircle cx='24' cy='24' r='2' fill='%23D97706'/%3E%3C/g%3E%3C/svg%3E");
+    background-size:48px 48px;
+  }
+  .sans{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;}
+  .title-font{font-family:'Georgia','Times New Roman',serif;letter-spacing:.08em;}
+
+  /* Papan */
+  .board-row{display:grid;gap:.4rem;justify-content:center;}
+  .tile{
+    width:var(--size);height:var(--size);
+    border:2px solid var(--tile-border);
+    background:rgba(42,30,24,.85);
+    display:flex;align-items:center;justify-content:center;
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    font-weight:800;font-size:calc(var(--size) * .55);
+    text-transform:uppercase;color:var(--parchment);
+    border-radius:.35rem;
+    transform-style:preserve-3d;
+    user-select:none;
+  }
+  .tile.filled{border-color:#9b7b5e;animation:pop .12s ease-out;}
+  .tile.correct{background:var(--leaf);border-color:var(--leaf);color:#fff;}
+  .tile.present{background:var(--gold);border-color:var(--gold);color:#1C1411;}
+  .tile.absent{background:var(--charcoal);border-color:var(--charcoal);color:#d6cfc7;}
+  .tile.flip{animation:flip .6s ease-in-out;}
+  .tile.hint-ghost{border-style:dashed;border-color:var(--gold);}
+  .tile.hint-ghost::before{content:attr(data-hint);color:var(--gold);opacity:.5;}
+  @keyframes flip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+  @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
+  .shake{animation:shake .5s ease-in-out;}
+  @keyframes shake{
+    0%,100%{transform:translateX(0)}
+    15%{transform:translateX(-8px)}30%{transform:translateX(8px)}
+    45%{transform:translateX(-6px)}60%{transform:translateX(6px)}
+    75%{transform:translateX(-3px)}90%{transform:translateX(3px)}
+  }
+  .bounce-win{animation:bounceWin .8s ease-in-out;}
+  @keyframes bounceWin{0%,20%{transform:translateY(0)}40%{transform:translateY(-14px)}50%{transform:translateY(3px)}60%{transform:translateY(-8px)}80%{transform:translateY(1px)}100%{transform:translateY(0)}}
+
+  /* Keyboard */
+  .kb-row{display:flex;justify-content:center;gap:.3rem;margin-bottom:.4rem;}
+  .key{
+    flex:1 1 0;max-width:42px;height:52px;
+    border-radius:.4rem;border:none;cursor:pointer;
+    background:#4A372B;color:var(--parchment);
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-weight:700;font-size:.95rem;
+    box-shadow:0 2px 0 rgba(0,0,0,.45);
+    transition:background .25s,transform .05s;
+    touch-action:manipulation;
+  }
+  .key:active{transform:translateY(2px);box-shadow:none;}
+  .key.wide{flex:1.6 1 0;max-width:66px;font-size:.68rem;letter-spacing:.02em;}
+  .key.correct{background:var(--leaf);color:#fff;}
+  .key.present{background:var(--gold);color:#1C1411;}
+  .key.absent{background:#262220;color:#7d746c;}
+  .key.enter{background:var(--terracotta);}
+
+  /* Badge & chip */
+  .badge{
+    display:inline-flex;align-items:center;gap:.4rem;
+    padding:.3rem .7rem;border-radius:999px;font-size:.72rem;
+    border:1px solid rgba(217,119,6,.55);background:rgba(28,20,17,.8);
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  .badge b{color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:.62rem;}
+  .chip{
+    display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;
+    padding:.35rem .7rem;border-radius:999px;font-size:.78rem;font-weight:700;
+    border:1px solid rgba(217,119,6,.6);background:rgba(42,30,24,.9);color:var(--parchment);
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    transition:background .2s,transform .1s;
+  }
+  .chip:hover{background:rgba(217,119,6,.25);}
+  .chip:active{transform:scale(.96);}
+  .chip.static{cursor:default;}
+  .chip.static:hover{background:rgba(42,30,24,.9);}
+  .flame{display:inline-block;animation:flicker 1.2s ease-in-out infinite;}
+  @keyframes flicker{0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.12) rotate(3deg)}}
+  /* Daily Streak: menyala = sudah aman hari ini, redup berdenyut = belum main hari ini */
+  #chipStreak.safe{
+    background:linear-gradient(180deg,#F59E0B,#D97706);color:#1C1411;border-color:#FBBF24;
+    box-shadow:0 0 14px rgba(245,158,11,.75);
+  }
+  #chipStreak.dim{opacity:.6;animation:breathe 2.4s ease-in-out infinite;}
+  #chipStreak.dim .flame{filter:grayscale(.75);animation:none;}
+  @keyframes breathe{0%,100%{opacity:.5}50%{opacity:.85}}
+  .chip.bump{animation:chipBump .7s ease-out;}
+  @keyframes chipBump{0%{transform:scale(1)}30%{transform:scale(1.35);background:rgba(217,119,6,.55)}100%{transform:scale(1)}}
+  .btn-hint{
+    display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;
+    padding:.4rem .9rem;border-radius:999px;font-size:.75rem;font-weight:700;
+    background:linear-gradient(180deg,#F59E0B,#D97706);color:#1C1411;border:none;
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    box-shadow:0 2px 0 #7C2D12;
+  }
+  .btn-hint:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;}
+  .btn-hint:not(:disabled):active{transform:translateY(2px);box-shadow:none;}
+
+  /* Toast */
+  #toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:90;pointer-events:none;display:flex;flex-direction:column;gap:6px;align-items:center;width:max-content;max-width:92vw;}
+  .toast-item{background:var(--parchment);color:#1C1411;padding:.5rem 1rem;border-radius:.5rem;font-weight:700;font-size:.85rem;font-family:system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.5);animation:fadeIn .15s ease-out;text-align:center;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* Modal */
+  #overlay{position:fixed;inset:0;background:rgba(10,6,4,.78);z-index:50;display:none;align-items:center;justify-content:center;padding:1rem;overflow-y:auto;}
+  #overlay.open{display:flex;}
+  .card{
+    width:100%;max-width:26rem;border-radius:1rem;
+    background:linear-gradient(180deg,#FAF3E0 0%,#F1E4C3 100%);
+    color:#2b1a10;border:3px solid var(--gold);
+    box-shadow:0 0 0 4px #1C1411,0 0 0 6px var(--gold),0 20px 50px rgba(0,0,0,.6);
+    animation:cardIn .35s ease-out;max-height:92vh;overflow-y:auto;
+  }
+  @keyframes cardIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
+  .card .btn{font-family:system-ui,sans-serif;font-weight:700;border-radius:.6rem;padding:.7rem 1rem;cursor:pointer;border:none;font-size:.9rem;}
+  .card .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-share{background:var(--leaf);color:#fff;}
+  .btn-new{background:var(--terracotta);color:#fff;}
+  .btn-gold{background:var(--gold);color:#1C1411;}
+  .btn-google{background:#fff;color:#2b1a10;border:2px solid #2b1a10 !important;display:flex;align-items:center;justify-content:center;gap:.6rem;}
+  .btn-ghost{background:transparent;color:#2b1a10;border:2px solid #2b1a10 !important;}
+.card .btn-danger{background:#B91C1C;color:#fff;font-size:.75rem;padding:.5rem .8rem;}
+.card .btn-danger:hover:not(:disabled){background:#991B1B;}
+  .emoji-grid{font-size:1.2rem;line-height:1.35;letter-spacing:.05em;}
+
+  .tenun-divider{height:14px;width:100%;}
+  ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#5B4636;border-radius:3px}
+
+  /* Streak badge di modal */
+  .streak-badge{
+    display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1rem;border-radius:999px;
+    background:linear-gradient(90deg,#9A3412,#D97706);color:#FFF7E0;font-family:system-ui,sans-serif;font-weight:800;font-size:.85rem;
+    box-shadow:0 4px 14px rgba(154,52,18,.5);animation:badgePop .8s cubic-bezier(.2,1.6,.4,1) both, glow 1.6s ease-in-out .8s infinite;
+  }
+  .streak-badge.safe{background:linear-gradient(90deg,#15803D,#16A34A);box-shadow:0 4px 14px rgba(21,128,61,.45);animation:badgePop .8s cubic-bezier(.2,1.6,.4,1) both;}
+  @keyframes badgePop{0%{transform:scale(.2) rotate(-8deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+  @keyframes glow{0%,100%{box-shadow:0 4px 14px rgba(154,52,18,.5)}50%{box-shadow:0 4px 26px rgba(245,158,11,.95)}}
+
+  /* Progress bar */
+  .progress{height:12px;border-radius:999px;background:rgba(43,26,16,.18);overflow:hidden;border:1px solid rgba(154,52,18,.5);}
+  .progress > div{height:100%;background:linear-gradient(90deg,#15803D,#D97706);border-radius:999px;transition:width .4s linear;}
+
+  /* Galeri kartu */
+  .gcard{
+    border-radius:.7rem;padding:.5rem .45rem;text-align:center;border:2px solid #9A3412;
+    background:linear-gradient(180deg,#FFF8E6,#F3DFA8);color:#2b1a10;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:.15rem;min-height:128px;
+    font-family:system-ui,sans-serif;transition:transform .15s;
+  }
+  .gcard:hover{transform:translateY(-2px);}
+  .gcard.locked{background:#cdbf9f;border-color:#8a7a5a;border-style:dashed;color:#5c5240;cursor:default;opacity:.7;filter:grayscale(.7);}
+  .gcard.locked:hover{transform:none;}
+  .gcard .w{font-family:Georgia,serif;font-weight:700;font-size:1rem;letter-spacing:.06em;color:#9A3412;}
+  .gcard.locked .w{color:#5c5240;}
+  .gcard .o{font-size:.58rem;line-height:1.15;color:#4a3a28;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .gcard .c{font-size:.52rem;line-height:1.15;color:#15803D;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+  .gcard.locked .c{color:#6b5f48;}
+
+  /* Tab kategori galeri */
+  .gtabs{display:flex;gap:.4rem;overflow-x:auto;padding:.1rem .1rem .45rem;margin:0 -.1rem;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+  .gtab{flex:0 0 auto;font-family:system-ui,sans-serif;font-size:.72rem;font-weight:700;padding:.35rem .7rem;border-radius:999px;border:2px solid #9A3412;background:rgba(255,248,230,.7);color:#9A3412;cursor:pointer;white-space:nowrap;}
+  .gtab.active{background:linear-gradient(180deg,#B45309,#9A3412);color:#FFF7E0;}
+  .ghead{font-family:Georgia,serif;font-weight:700;font-size:.95rem;color:#9A3412;margin:.9rem 0 .4rem;padding-bottom:.2rem;border-bottom:1px solid rgba(154,52,18,.35);}
+  .ghead:first-child{margin-top:.2rem;}
+  .ghead small{font-family:system-ui,sans-serif;font-weight:700;font-size:.7rem;color:#15803D;margin-left:.35rem;}
+  .gempty{font-family:system-ui,sans-serif;font-size:.75rem;text-align:center;color:#6b5f48;padding:.9rem .5rem;border:2px dashed rgba(138,122,90,.7);border-radius:.7rem;}
+
+  /* Ilustrasi kartu (gambar + cadangan ikon SVG) */
+  .cimg{width:100%;max-width:220px;height:132px;margin:.55rem auto 0;border-radius:.8rem;border:2px solid #9A3412;background:linear-gradient(180deg,#FFF8E6,#F3DFA8);overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  .cimg img{width:100%;height:100%;object-fit:contain;display:block;}
+  .cimg .cfb{display:none;width:100%;height:100%;align-items:center;justify-content:center;color:#9A3412;}
+  .cimg .cfb svg{width:64px;height:64px;}
+
+  /* Leaderboard */
+  .lb-row{display:flex;align-items:center;gap:.55rem;padding:.45rem .55rem;border-radius:.6rem;background:rgba(255,255,255,.45);font-family:system-ui,sans-serif;}
+  .lb-row.me{background:linear-gradient(90deg,rgba(217,119,6,.45),rgba(217,119,6,.2));border:2px solid #D97706;}
+  .lb-rank{width:1.9rem;text-align:center;font-weight:800;font-size:.95rem;color:#9A3412;}
+
+  /* Slot iklan */
+  .ad-slot{border:2px dashed #9A3412;border-radius:.7rem;background:#fff8e6;min-height:170px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;}
+  .ad-label{position:absolute;top:4px;left:8px;font-size:.55rem;letter-spacing:.15em;color:#9A3412;font-family:system-ui,sans-serif;font-weight:700;}
+
+  #confetti{position:fixed;inset:0;width:100%;height:100%;z-index:80;pointer-events:none;}
+</style>
+</head>
+<body>
+
+<!-- Definisi SVG global (motif & simbol) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Simbol Gunungan Wayang (Kayon) -->
+    <symbol id="gunungan" viewBox="0 0 24 30">
+      <path d="M12 1 C13.5 7 21 11 21 20 L21 28 L3 28 L3 20 C3 11 10.5 7 12 1 Z" fill="currentColor"/>
+      <path d="M12 6 C13 10 17.5 13 17.5 20 L17.5 25 L6.5 25 L6.5 20 C6.5 13 11 10 12 6 Z" fill="none" stroke="#1C1411" stroke-width="1" opacity=".75"/>
+      <path d="M12 12 C13.2 14 14.5 16 14.5 19 L14.5 25 L9.5 25 L9.5 19 C9.5 16 10.8 14 12 12 Z" fill="#1C1411" opacity=".55"/>
+      <circle cx="12" cy="17" r="1.4" fill="currentColor"/>
+      <rect x="2" y="28" width="20" height="1.5" fill="currentColor"/>
+    </symbol>
+    <!-- Pola Tenun Ikat / Songket -->
+    <pattern id="tenun" width="28" height="14" patternUnits="userSpaceOnUse">
+      <rect width="28" height="14" fill="#7C2D12"/>
+      <path d="M0 7 L7 1 L14 7 L7 13 Z" fill="#D97706"/>
+      <path d="M14 7 L21 1 L28 7 L21 13 Z" fill="#15803D"/>
+      <path d="M3.5 7 L7 4 L10.5 7 L7 10 Z" fill="#7C2D12"/>
+      <path d="M17.5 7 L21 4 L24.5 7 L21 10 Z" fill="#FAF3E0"/>
+      <rect y="0" width="28" height="1.2" fill="#FAF3E0" opacity=".7"/>
+      <rect y="12.8" width="28" height="1.2" fill="#FAF3E0" opacity=".7"/>
+    </pattern>
+    <!-- Pola Batik Kawung kecil -->
+    <pattern id="kawungP" width="20" height="20" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#D97706" stroke-width=".8">
+        <ellipse cx="10" cy="5" rx="3" ry="5"/><ellipse cx="10" cy="15" rx="3" ry="5"/>
+        <ellipse cx="5" cy="10" rx="5" ry="3"/><ellipse cx="15" cy="10" rx="5" ry="3"/>
+      </g>
+      <circle cx="10" cy="10" r="1" fill="#D97706"/>
+    </pattern>
+    <!-- Pola Batik Parang -->
+    <pattern id="parangP" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+      <rect width="24" height="24" fill="#4A2512"/>
+      <path d="M0 24 C6 24 6 12 12 12 C18 12 18 0 24 0" fill="none" stroke="#D97706" stroke-width="2"/>
+      <path d="M-12 24 C-6 24 -6 12 0 12 C6 12 6 0 12 0" fill="none" stroke="#FAF3E0" stroke-width="1" opacity=".6"/>
+      <circle cx="12" cy="18" r="1.6" fill="#D97706"/>
+    </pattern>
+    <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A1E18"/>
+      <stop offset="1" stop-color="#5B2A12"/>
+    </linearGradient>
+    <radialGradient id="sunG" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#F59E0B" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#D97706" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>
+
+<div class="min-h-screen flex flex-col items-center">
+
+  <!-- HEADER -->
+  <header class="w-full max-w-md px-4 pt-3">
+    <div class="flex items-center justify-between">
+      <button id="btnHelp" class="w-9 h-9 rounded-full border border-amber-600/60 text-amber-500 sans font-bold" aria-label="Cara bermain">?</button>
+      <div class="flex items-center gap-2">
+        <svg viewBox="0 0 24 30" class="w-6 h-7 text-amber-500"><use href="#gunungan"/></svg>
+        <h1 class="title-font text-2xl sm:text-3xl font-bold text-amber-500 leading-none">LOKA KATA</h1>
+        <svg viewBox="0 0 24 30" class="w-6 h-7 text-amber-500" style="transform:scaleX(-1)"><use href="#gunungan"/></svg>
+      </div>
+      <button id="btnNew" class="w-9 h-9 rounded-full border border-amber-600/60 text-amber-500 sans" aria-label="Kata baru" title="Kata baru">↻</button>
+    </div>
+    <p class="text-center text-[.7rem] tracking-[.25em] uppercase text-amber-200/70 sans mt-1">Tebak Budaya Nusantara</p>
+    <!-- Pemisah Tenun Ikat / Songket -->
+    <svg class="tenun-divider mt-2" viewBox="0 0 400 14" preserveAspectRatio="none" aria-hidden="true">
+      <rect width="400" height="14" fill="url(#tenun)"/>
+    </svg>
+    <!-- Toolbar: streak, peringkat, kartu, akun, suara -->
+    <div class="flex flex-wrap justify-center gap-2 mt-3">
+      <span class="chip static dim" id="chipStreak" title="Streak harian"><span class="flame">🔥</span><span><span id="streakNum">0</span> Hari</span></span>
+      <button class="chip" id="btnRank">🏆 Peringkat</button>
+      <button class="chip" id="btnCards">📜 Kartu</button>
+      <button class="chip" id="btnAccount"><span id="accAvatar"></span><span id="accName" class="max-w-[6rem] truncate">Tamu</span></button>
+      <button class="chip" id="btnSound" aria-label="Suara">🔊</button>
+    </div>
+  </header>
+
+  <!-- PETUNJUK -->
+  <section class="w-full max-w-md px-4 mt-3 flex flex-wrap justify-center gap-2">
+    <span class="badge"><b>Kategori</b><span id="hintCat">—</span></span>
+    <span class="badge"><b>Asal Daerah</b><span id="hintOrigin">—</span></span>
+    <button class="btn-hint" id="btnHint">💡 Hint (Tonton Iklan) <span id="hintLeft">· 2/2</span></button>
+  </section>
+
+  <!-- PAPAN -->
+  <main class="w-full max-w-md px-4 mt-4 flex-1">
+    <div id="board" class="flex flex-col gap-[.4rem] items-center" aria-label="Papan permainan"></div>
+  </main>
+
+  <!-- KEYBOARD -->
+  <section class="w-full max-w-md px-2 mt-4" aria-label="Keyboard virtual">
+    <div id="keyboard"></div>
+  </section>
+
+  <!-- FOOTER DEKORATIF: ZONA AMAN (SAFE BUFFER) -->
+  <footer class="w-full mt-2 min-h-[110px] relative" style="height:120px">
+    <svg viewBox="0 0 800 120" preserveAspectRatio="xMidYMax slice" class="absolute inset-0 w-full h-full" role="img" aria-label="Panorama budaya Nusantara: Rumah Gadang, wayang kulit, gunungan, Joglo, dan pita batik">
+      <rect width="800" height="120" fill="url(#skyG)" opacity=".55"/>
+      <circle cx="400" cy="70" r="55" fill="url(#sunG)"/>
+      <!-- Bukit -->
+      <path d="M0 98 Q120 70 240 92 T480 90 T800 94 L800 120 L0 120 Z" fill="#241711"/>
+
+      <!-- Rumah Gadang (kiri) -->
+      <g transform="translate(30,26)" fill="#0f0a07">
+        <path d="M0 44 C8 40 12 22 18 0 C24 14 34 28 55 28 C76 28 86 14 92 0 C98 22 102 40 110 44 L100 48 L10 48 Z"/>
+        <rect x="12" y="48" width="86" height="26"/>
+        <rect x="8" y="74" width="94" height="3"/>
+        <g stroke="#D97706" stroke-width="1.2" opacity=".85" fill="none">
+          <path d="M18 52 L18 74 M32 52 L32 74 M46 52 L46 74 M60 52 L60 74 M74 52 L74 74 M88 52 L88 74"/>
+          <path d="M14 50 L96 50"/>
+        </g>
+        <path d="M24 38 L55 30 L86 38" stroke="#D97706" stroke-width="1" fill="none" opacity=".7"/>
+      </g>
+
+      <!-- Wayang Kulit (kiri-tengah) -->
+      <g transform="translate(170,18)" fill="#0f0a07">
+        <path d="M22 0 L26 6 L30 2 L29 9 C33 10 33 16 29 18 L28 22 C36 24 38 30 36 40 L40 52 C42 56 40 60 36 60 L36 82 L8 82 L8 60 C4 60 2 56 4 52 L8 40 C6 30 8 24 16 22 L15 18 C11 16 11 10 15 9 L14 2 L18 6 Z"/>
+        <path d="M38 38 C50 36 56 44 58 56 L60 74" stroke="#0f0a07" stroke-width="2.5" fill="none"/>
+        <path d="M60 74 L62 100" stroke="#0f0a07" stroke-width="2"/>
+        <path d="M6 40 C-2 50 -4 62 -2 76" stroke="#0f0a07" stroke-width="2.5" fill="none"/>
+        <g stroke="#D97706" stroke-width=".9" fill="none" opacity=".8">
+          <path d="M14 66 L30 66 M14 72 L30 72 M14 78 L30 78"/>
+          <circle cx="22" cy="12" r="2"/>
+          <path d="M16 32 Q22 38 28 32"/>
+        </g>
+      </g>
+
+      <!-- Gunungan (tengah) -->
+      <g transform="translate(372,10)">
+        <path d="M28 0 C34 20 56 30 56 62 L56 100 L0 100 L0 62 C0 30 22 20 28 0 Z" fill="#0f0a07" stroke="#D97706" stroke-width="1.5"/>
+        <path d="M28 16 C32 30 46 38 46 62 L46 92 L10 92 L10 62 C10 38 24 30 28 16 Z" fill="none" stroke="#D97706" stroke-width="1" opacity=".8"/>
+        <path d="M28 36 C32 42 38 48 38 60 L38 92 L18 92 L18 60 C18 48 24 42 28 36 Z" fill="#9A3412" opacity=".85"/>
+        <circle cx="28" cy="58" r="4" fill="#D97706"/>
+        <path d="M28 66 L28 92 M22 76 Q28 70 34 76 M22 84 Q28 78 34 84" stroke="#0f0a07" stroke-width="1.2" fill="none"/>
+        <path d="M6 100 Q12 90 18 100 M38 100 Q44 90 50 100" stroke="#D97706" stroke-width="1" fill="none"/>
+      </g>
+
+      <!-- Wayang Kulit (kanan-tengah, cermin) -->
+      <g transform="translate(630,18) scale(-1,1)" fill="#0f0a07">
+        <path d="M22 0 L26 6 L30 2 L29 9 C33 10 33 16 29 18 L28 22 C36 24 38 30 36 40 L40 52 C42 56 40 60 36 60 L36 82 L8 82 L8 60 C4 60 2 56 4 52 L8 40 C6 30 8 24 16 22 L15 18 C11 16 11 10 15 9 L14 2 L18 6 Z"/>
+        <path d="M38 38 C50 36 56 44 58 56 L60 74" stroke="#0f0a07" stroke-width="2.5" fill="none"/>
+        <path d="M60 74 L62 100" stroke="#0f0a07" stroke-width="2"/>
+        <path d="M6 40 C-2 50 -4 62 -2 76" stroke="#0f0a07" stroke-width="2.5" fill="none"/>
+        <g stroke="#D97706" stroke-width=".9" fill="none" opacity=".8">
+          <path d="M14 66 L30 66 M14 72 L30 72 M14 78 L30 78"/>
+          <circle cx="22" cy="12" r="2"/>
+          <path d="M16 32 Q22 38 28 32"/>
+        </g>
+      </g>
+
+      <!-- Joglo (kanan) -->
+      <g transform="translate(660,30)" fill="#0f0a07">
+        <path d="M0 40 L22 24 L88 24 L110 40 Z"/>
+        <path d="M24 24 L40 10 L70 10 L86 24 Z"/>
+        <path d="M40 10 L55 0 L70 10 Z"/>
+        <rect x="14" y="40" width="82" height="34"/>
+        <rect x="8" y="74" width="94" height="3"/>
+        <g stroke="#D97706" stroke-width="1.2" opacity=".85" fill="none">
+          <path d="M22 42 L22 74 M40 42 L40 74 M55 42 L55 74 M70 42 L70 74 M88 42 L88 74"/>
+          <path d="M26 24 L84 24 M42 10 L68 10"/>
+        </g>
+      </g>
+
+      <!-- Pita Batik / Tenun di dasar -->
+      <rect y="100" width="800" height="20" fill="url(#parangP)"/>
+      <rect y="96" width="800" height="5" fill="#D97706"/>
+      <rect y="101" width="800" height="2" fill="#FAF3E0" opacity=".6"/>
+      <rect y="108" width="800" height="12" fill="url(#tenun)" opacity=".95"/>
+    </svg>
+  </footer>
+</div>
+
+<!-- Confetti canvas -->
+<canvas id="confetti"></canvas>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL -->
+<div id="overlay" role="dialog" aria-modal="true">
+  <div class="card" id="card"></div>
+</div>
+
+<script>
+/* =====================================================================
+   KONFIGURASI FIREBASE
+   Jika apiKey kosong, halaman dijalankan di file:// atau di dalam preview
+   Claude Artifacts, aplikasi otomatis memakai MODE SIMULASI (localStorage).
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCgqPMtnF3Fih-PZq_SFfYrMKngqBJz51o",
+  authDomain: "lokakata-nusantara.firebaseapp.com",
+  projectId: "lokakata-nusantara",
+  storageBucket: "lokakata-nusantara.firebasestorage.app",
+  messagingSenderId: "149181971321",
+  appId: "1:149181971321:web:f8a74dddc92582e0c18da8",
+  measurementId: "G-KF2M6NSKLE"
+};
+
+let fbReady = false, auth = null, db = null;
+function initFirebase(){
+  const keyBad = !firebaseConfig.apiKey || /^(ISI|YOUR|PASTE)/i.test(firebaseConfig.apiKey);
+  const badEnv = !/^https?:$/.test(location.protocol) ||
+                 /claude\.ai|claudeusercontent|anthropic\.com/i.test(location.hostname);
+  if(keyBad || badEnv || typeof firebase === 'undefined') return false;
+  try{
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    return true;
+  }catch(e){ console.warn('Firebase gagal diinisialisasi:', e); return false; }
+}
+
+/* ================= DATABASE 60 KATA ================= */
+const WORDS = [
+  {"word": "ASMAT", "category": "Suku Nusantara", "origin": "Papua Selatan", "image": "images/asmat.png", "desc": "Kelompok masyarakat adat di wilayah pesisir dan rawa-rawa Papua Selatan yang terkenal dengan seni ukiran kayu, patung leluhur, serta kehidupan yang sangat erat dengan alam. Bagi suku Asmat, mengukir merupakan wujud penghormatan spiritual kepada arwah nenek moyang sekaligus sarana menjaga harmoni semesta."},
+  {"word": "BADUY", "category": "Suku Nusantara", "origin": "Banten", "image": "images/baduy.png", "desc": "Masyarakat adat Sunda Wiwitan yang teguh mempertahankan tradisi leluhur, kesederhanaan hidup, dan aturan adat ketat dalam keseharian mereka. Terbagi menjadi Baduy Dalam dan Baduy Luar, komunitas ini menjunjung prinsip pikukuh yang menjaga kelestarian hutan dan menolak modernisasi berlebihan."},
+  {"word": "DAYAK", "category": "Suku Nusantara", "origin": "Kalimantan", "image": "images/dayak.png", "desc": "Sebutan bagi rumpun masyarakat asli Pulau Kalimantan yang memiliki kekayaan tradisi rumah panjang, seni ukir, serta beragam upacara adat. Budaya suku Dayak lekat dengan filosofi keseimbangan alam, simbolisme burung enggang, dan kearifan hidup di sepanjang aliran sungai besar."},
+  {"word": "SASAK", "category": "Suku Nusantara", "origin": "Nusa Tenggara Barat", "image": "images/sasak.png", "desc": "Suku asli penghuni Pulau Lombok yang mewarisi tradisi rumah adat lumbung, kain tenun ikat, bahasa daerah, serta upacara perkawinan khas. Masyarakat Sasak juga dikenal melalui kesenian musik perkusi Gendang Beleq dan tradisi kawin culik adat (Merarik)."},
+  {"word": "BAJAU", "category": "Suku Nusantara", "origin": "Pesisir Sulawesi, Kalimantan, & Indonesia Timur", "image": "images/bajau.png", "desc": "Kelompok masyarakat maritim nomaden yang memiliki hubungan sangat erat dengan laut, tradisi pelayaran, dan kehidupan pesisir. Dijuluki sebagai pengembara laut, suku Bajau memiliki kemampuan menyelam bebas yang luar biasa serta membangun hunian panggung di atas perairan dangkal."},
+  {"word": "BUGIS", "category": "Suku Nusantara", "origin": "Sulawesi Selatan", "image": "images/bugis.png", "desc": "Suku pelaut dan perantau ulung yang memiliki tradisi pelayaran, perniagaan, kesusastraan, serta sistem adat yang kokoh. Masyarakat Bugis tersohor lewat perahu layar Pinisi, epik sastra kuno La Galigo, dan falsafah harga diri serta solidaritas Siri' na Pacce."},
+  {"word": "KAYAN", "category": "Suku Nusantara", "origin": "Kalimantan Utara & Kalimantan Timur", "image": "images/kayan.png", "desc": "Salah satu sub-suku besar Dayak yang memiliki tradisi seni ukir, hunian rumah panjang, dan kebudayaan sungai di pedalaman Kalimantan. Suku Kayan dikenal mahir menciptakan motif ukiran sulur yang rumit serta melestarikan seni musik petik sampe."},
+  {"word": "BATAK", "category": "Suku Nusantara", "origin": "Sumatra Utara", "image": "images/batak.png", "desc": "Rumpun masyarakat yang mendiami kawasan sekitar Danau Toba dan dataran tinggi Sumatra Utara, meliputi Toba, Karo, Simalungun, Pakpak, Angkola, dan Mandailing. Kehidupan sosial suku Batak bertumpu pada sistem kekerabatan patrilineal (marga), kain sakral Ulos, dan falsafah Dalihan Na Tolu."},
+  {"word": "SUNDA", "category": "Suku Nusantara", "origin": "Jawa Barat", "image": "images/sunda.png", "desc": "Kelompok etnis yang mendiami wilayah Tatar Pasundan di bagian barat Pulau Jawa dengan tutur bahasa yang lembut serta budaya agraris yang kuat. Warisan budaya Sunda tercermin dalam seni musik angklung dan kecapi suling, tari jaipong, serta nilai persaudaraan Silih Asah, Silih Asih, Silih Asuh."},
+  {"word": "OSING", "category": "Suku Nusantara", "origin": "Jawa Timur", "image": "images/osing.png", "desc": "Masyarakat asli ujung timur Pulau Jawa yang mewarisi tradisi Kerajaan Blambangan dengan dialek bahasa Jawa kuno tersendiri. Suku Osing melestarikan kesenian Tari Gandrung, ritual bersih desa Seblang, dan tradisi kenduri massal Tumpeng Sewu."},
+  {"word": "BUTON", "category": "Suku Nusantara", "origin": "Sulawesi Tenggara", "image": "images/buton.png", "desc": "Masyarakat kepulauan di tenggara Sulawesi yang memiliki sejarah peradaban bahari serta sistem pemerintahan Kesultanan Buton yang maju. Suku Buton dikenal dengan peninggalan Benteng Keraton Buton yang merupakan benteng terluas di dunia serta tradisi jamuan adat Pekande-kandea."},
+  {"word": "KAILI", "category": "Suku Nusantara", "origin": "Sulawesi Tengah", "image": "images/kaili.png", "desc": "Suku asli yang mendiami lembah Palu, Donggala, dan Sigi dengan keahlian kriya pakaian kulit kayu (Ivo) serta kekayaan sastra lisan. Masyarakat Kaili menjunjung tinggi semangat kebersamaan (Sintuvu) dan melestarikan upacara penyembuhan tradisional Balia."},
+  {"word": "AMBON", "category": "Suku Nusantara", "origin": "Maluku", "image": "images/ambon.png", "desc": "Masyarakat kepulauan yang kaya akan tradisi musik vokal, tarian perang Cakalele, dan sejarah perdagangan rempah Nusantara. Budaya Ambon diikat oleh sistem persaudaraan lintas desa dan agama bernama Pela Gandong yang menjaga kerukunan komunal."},
+  {"word": "SUMBA", "category": "Suku Nusantara", "origin": "Nusa Tenggara Timur", "image": "images/sumba.png", "desc": "Masyarakat penghuni Pulau Sumba yang masih melestarikan kepercayaan asli pemujaan leluhur (Marapu) dan tradisi kubur batu megalitik. Suku Sumba tersohor melalui mahakarya kain tenun ikat bermotif fauna ikonik serta ritual ketangkasan berkuda Pasola."},
+  {"word": "SAKAI", "category": "Suku Nusantara", "origin": "Riau", "image": "images/sakai.png", "desc": "Masyarakat adat yang secara historis mendiami wilayah hutan dan aliran sungai di pedalaman Kabupaten Bengkalis dan Siak, Riau. Suku Sakai memiliki kearifan lokal dalam menjaga hutan larangan serta tradisi pengobatan spiritual bernama Badewo."},
+  {"word": "NGASA", "category": "Upacara Adat", "origin": "Jawa Tengah", "image": "images/ngasa.png", "desc": "Upacara adat tahunan masyarakat Kampung Budaya Jalawastu sebagai ungkapan syukur kepada Tuhan atas hasil alam dan keselamatan hidup. Prosesi ini ditandai dengan arak-arakan sesaji hasil bumi menuju bukit keramat tanpa menyertakan nasi maupun daging sebagai lambang kesederhanaan."},
+  {"word": "TABOT", "category": "Upacara Adat", "origin": "Bengkulu", "image": "images/tabot.png", "desc": "Tradisi perayaan tahunan setiap tanggal 1 hingga 10 Muharam untuk mengenang gugurnya cucu Nabi Muhammad SAW, Husein bin Ali, dalam peristiwa Karbala. Festival ini dimeriahkan dengan arak-arakan menara hias bertingkat (tabot) yang diiringi tabuhan musik tradisional dol."},
+  {"word": "SEREN", "category": "Upacara Adat", "origin": "Jawa Barat & Banten", "image": "images/seren.png", "desc": "Kata dari bahasa Sunda yang berarti 'menyerahkan' dan menjadi inti dari tradisi Seren Taun sebagai ungkapan syukur atas panen padi. Puncak ritualnya berupa arak-arakan hasil bumi untuk disimpan ke dalam lumbung adat (leuit) demi menjaga ketahanan pangan desa."},
+  {"word": "NYEPI", "category": "Upacara Adat", "origin": "Bali", "image": "images/nyepi.png", "desc": "Hari raya keagamaan umat Hindu di Bali yang menandai pergantian tahun baru Saka melalui penghentian aktivitas untuk penyucian diri dan refleksi. Selama 24 jam penuh, masyarakat menjalankan Catur Brata Penyepian tanpa menyalakan api, tanpa bekerja, tanpa bepergian, dan tanpa hiburan."},
+  {"word": "TIWAH", "category": "Upacara Adat", "origin": "Kalimantan Tengah", "image": "images/tiwah.png", "desc": "Upacara kematian tingkat akhir paling sakral dalam tradisi Hindu Kaharingan Suku Dayak Ngaju untuk mengantarkan arwah leluhur menuju surga (Lewu Tatau). Prosesinya mencakup penggalian tulang-belulang jenazah untuk disucikan dan ditempatkan di dalam bangunan khusus bernama Sandung."},
+  {"word": "RAMBU", "category": "Upacara Adat", "origin": "Sulawesi Selatan", "image": "images/rambu.png", "desc": "Bagian dari nama Rambu Solo, yakni upacara pemakaman adat masyarakat Tana Toraja sebagai bentuk penghormatan terakhir bagi mendiang anggota keluarga. Ritual ini melibatkan penyembelihan kerbau (tedong), tarian duka Ma'badong, dan penempatan jenazah di liang tebing batu."},
+  {"word": "RUWAT", "category": "Upacara Adat", "origin": "Jawa Tengah & Yogyakarta", "image": "images/ruwat.png", "desc": "Ritual penyucian diri (ruwatan) dalam tradisi Jawa untuk membebaskan seseorang atau suatu wilayah dari nasib buruk dan marabahaya (sukerta). Upacara ini umumnya digelar melalui pertunjukan wayang kulit semalam suntuk dengan lakon khusus Murwakala."},
+  {"word": "JOGLO", "category": "Rumah Adat", "origin": "Jawa Tengah & Yogyakarta", "image": "images/joglo.png", "desc": "Rumah tradisional Jawa berciri atap trapesium bertingkat yang ditopang empat tiang utama (soko guru) serta memiliki struktur ruang penuh makna filosofis. Pembagian ruangnya mulai dari pendopo, pringgitan, hingga dalem mencerminkan keselarasan hubungan sosial dan spiritual penghuninya."},
+  {"word": "LIMAS", "category": "Rumah Adat", "origin": "Sumatra Selatan (Palembang)", "image": "images/limas.png", "desc": "Rumah panggung tradisional khas Palembang dengan bentuk atap menyerupai limas yang mencerminkan tata ruang dan kehidupan sosial masyarakatnya. Lantai Rumah Limas dibuat bertingkat-tingkat (bengkilas) sesuai hierarki usia, kedudukan, dan tata krama adat saat menggelar musyawarah."},
+  {"word": "LEUIT", "category": "Rumah Adat", "origin": "Jawa Barat & Banten", "image": "images/leuit.png", "desc": "Lumbung tradisional untuk menyimpan hasil panen padi dalam kehidupan masyarakat adat Sunda. Bangunan berdinding anyaman bambu dan beratap ijuk ini dilengkapi piringan kayu anti-tikus pada tiangnya sebagai simbol kemandirian pangan komunal."},
+  {"word": "SAUNG", "category": "Rumah Adat", "origin": "Jawa Barat", "image": "images/saung.png", "desc": "Bangunan sederhana berbentuk pondok terbuka yang biasa ditemukan di area persawahan maupun permukiman masyarakat Sunda. Dibuat dari material bambu dan atap rumbia yang sejuk, saung berfungsi sebagai tempat berteduh petani sekaligus ruang berkumpul yang akrab."},
+  {"word": "HONAI", "category": "Rumah Adat", "origin": "Papua Pegunungan", "image": "images/honai.png", "desc": "Rumah adat berbentuk bundar menyerupai jamur dengan dinding kayu berlapis serta atap kerucut dari jerami ilalang tanpa jendela. Struktur rendah dan tertutup pada Honai berfungsi efektif memerangkap kehangatan api unggun untuk menangkal suhu dingin Lembah Baliem."},
+  {"word": "LAMIN", "category": "Rumah Adat", "origin": "Kalimantan Timur", "image": "images/lamin.png", "desc": "Rumah panjang panggung khas suku Dayak di Kalimantan Timur yang dibangun menggunakan kayu ulin tahan air dan mampu menampung puluhan keluarga. Dihiasi ukiran totem pelindung, Lamin menjadi simbol kuatnya nilai gotong royong dan kehidupan komunal."},
+  {"word": "MBARU", "category": "Rumah Adat", "origin": "Nusa Tenggara Timur", "image": "images/mbaru.png", "desc": "Bagian dari istilah Mbaru Niang, rumah adat berbentuk kerucut menjulang dengan atap ijuk hingga menyentuh tanah di Desa Adat Wae Rebo. Bangunan lima tingkat ini membagi ruang secara vertikal untuk hunian keluarga, lumbung pangan, hingga tempat penyimpanan benda pusaka."},
+  {"word": "ENCIM", "category": "Busana Adat", "origin": "DKI Jakarta (Kebaya Encim, busana adat Betawi)", "image": "images/encim.png", "desc": "Busana kebaya tradisional khas perempuan Betawi hasil akulturasi budaya Tionghoa peranakan dan lokal dengan ciri kerah V dan sulaman kerancang halus. Kebaya Encim umumnya berwarna cerah dan dipadukan dengan kain sarung batik pesisiran yang anggun."},
+  {"word": "DODOT", "category": "Busana Adat", "origin": "Yogyakarta & Surakarta", "image": "images/dodot.png", "desc": "Busana kebesaran keraton Jawa berupa lembaran kain batik atau cinde berukuran jauh lebih panjang dan lebar dari jarit biasa yang dililitkan dengan teknik lipatan khusus (kampuh). Dodot dikenakan oleh raja, keluarga keraton, dan pengantin Jawa sebagai lambang keagungan martabat."},
+  {"word": "PAYAS", "category": "Busana Adat", "origin": "Bali", "image": "images/payas.png", "desc": "Merujuk pada Payas Agung, busana adat paling mewah dan sakral di Bali yang dikenakan dalam upacara pernikahan maupun potong gigi (mepandes). Busana ini memadukan tenun songket benang emas dengan mahkota tinggi (gelungan) berhias bunga emas yang melambangkan kemuliaan."},
+  {"word": "BILIU", "category": "Busana Adat", "origin": "Gorontalo", "image": "images/biliu.png", "desc": "Busana kebesaran pengantin perempuan adat Gorontalo yang terdiri atas atasan berhiaskan manik-manik emas, rok berlapis, serta mahkota berornamen rumit. Biliu memiliki empat warna adat utama (ungu, kuning, hijau, merah) yang masing-masing melambangkan status sosial dan nilai luhur."},
+  {"word": "POKKO", "category": "Busana Adat", "origin": "Sulawesi Selatan", "image": "images/pokko.png", "desc": "Baju adat tradisional perempuan Toraja yang berpotongan lengan pendek dan longgar dengan pilihan warna cerah seperti kuning, merah, atau putih. Baju Pokko dipadukan dengan sarung tenun serta rangkaian manik-manik kandaure yang melambangkan keanggunan."},
+  {"word": "TAKWO", "category": "Busana Adat", "origin": "Kalimantan Timur", "image": "images/takwo.png", "desc": "Busana adat tradisional masyarakat Kesultanan Kutai Kartanegara berupa jas tertutup berkerah tinggi bagi pria dan kebaya panjang berkancing emas bagi wanita. Baju Takwo umumnya berbahan beludru gelap yang dipadukan dengan kain panjang tapih bersulam benang emas."},
+  {"word": "SAPEI", "category": "Busana Adat", "origin": "Kalimantan Timur & Utara", "image": "images/sapei.png", "desc": "Bagian dari nama Sapei Sapaq, busana adat pria suku Dayak Kenyah dan Kayan berupa rompi tanpa lengan yang dihiasi manik-manik bermotif naga dan burung enggang. Pakaian ini dipadukan dengan cawat (abeb) serta penutup kepala berhias bulu enggang."},
+  {"word": "BATIK", "category": "Kain Tradisional", "origin": "Jawa Tengah", "image": "images/batik.png", "desc": "Kain bergambar yang dibuat menggunakan teknik perintang warna dengan malam atau lilin serta memiliki motif sarat filosofi dan identitas budaya. Dilukis memakai canting maupun cap, batik telah diakui dunia sebagai mahakarya warisan budaya takbenda Indonesia."},
+  {"word": "TAPIS", "category": "Kain Tradisional", "origin": "Lampung", "image": "images/tapis.png", "desc": "Kain tradisional khas Lampung bersulam benang emas atau perak yang memiliki motif khas dan digunakan dalam berbagai upacara adat. Dibuat di atas dasar kain tenun kapas bermotif garis, kain Tapis melambangkan kesucian, kehormatan, dan status sosial pemakainya."},
+  {"word": "TENUN", "category": "Kain Tradisional", "origin": "Nusa Tenggara Timur, Sumatra, & Sulawesi", "image": "images/tenun.png", "desc": "Teknik membuat kain tradisional dengan menyilangkan benang lungsi dan benang pakan yang berkembang dalam banyak komunitas Nusantara. Keahlian kriya ini melahirkan beragam warisan kain daerah seperti Tenun Ikat Sumba, Songket Sumatra, hingga Tenun Toraja."},
+  {"word": "LURIK", "category": "Kain Tradisional", "origin": "Jawa Tengah", "image": "images/lurik.png", "desc": "Kain tenun tradisional bermotif garis-garis yang memiliki nilai filosofi kesederhanaan, harapan, dan keteguhan hidup. Didominasi warna alami seperti cokelat, hitam, dan putih, kain Lurik mencerminkan sikap bersahaja dan kepatuhan pada nilai kebaikan."},
+  {"word": "ENDEK", "category": "Kain Tradisional", "origin": "Bali", "image": "images/endek.png", "desc": "Kain tenun ikat khas Bali yang dibuat dengan mengikat dan mencelupkan benang pakan sebelum ditenun sehingga menghasilkan pola simetris yang elegan. Awalnya dipakai dalam ritual keagamaan dan lingkungan puri, Tenun Endek kini menjadi kebanggaan busana adat masyarakat Bali."},
+  {"word": "JARIT", "category": "Kain Tradisional", "origin": "Jawa Tengah & Yogyakarta", "image": "images/jarit.png", "desc": "Lembaran kain batik panjang yang dililitkan melingkari pinggang hingga mata kaki sebagai bawahan busana adat pria maupun wanita Jawa. Cara pemakaian jarit yang rapat mengandung filosofi agar seseorang selalu melangkah dengan tenang, anggun, dan penuh kehati-hatian."},
+  {"word": "CINDE", "category": "Kain Tradisional", "origin": "Palembang & Jawa", "image": "images/cinde.png", "desc": "Kain sutra tenun ikat ganda (patola) bermotif bunga dan geometris yang bernilai tinggi dalam tradisi Kesultanan Palembang maupun Keraton Jawa. Kain Cinde kerap dimanfaatkan sebagai selendang, sabuk kebesaran (epok), hingga pelengkap busana pengantin bangsawan."},
+  {"word": "REBAB", "category": "Alat Musik Tradisional", "origin": "Jawa & Sumatra", "image": "images/rebab.png", "desc": "Alat musik gesek tradisional berdawai dua atau tiga dengan kotak resonansi berbentuk hati yang dilapisi membran tipis. Dalam ansambel gamelan Jawa maupun musik Melayu, rebab berfungsi menuntun alur melodi lagu dengan karakter suara yang lembut dan mendayu."},
+  {"word": "SITER", "category": "Alat Musik Tradisional", "origin": "Jawa Tengah & Yogyakarta", "image": "images/siter.png", "desc": "Alat musik petik tradisional berukuran ringkas dalam perangkat gamelan Jawa yang memiliki belasan senar logam berpasangan. Dimainkan menggunakan kedua ibu jari, siter menghasilkan ritme melodi cepat yang memperkaya jalinan harmoni gamelan."},
+  {"word": "SARON", "category": "Alat Musik Tradisional", "origin": "Jawa Tengah & Yogyakarta", "image": "images/saron.png", "desc": "Instrumen pukul utama dalam orkestra gamelan Jawa yang tersusun atas deretan bilah perunggu di atas wadah resonansi kayu (rancak). Saron ditabuh dengan pemukul kayu untuk membawakan kerangka melodi pokok (balungan) secara tegas dan nyaring."},
+  {"word": "BANSI", "category": "Alat Musik Tradisional", "origin": "Sumatra Barat", "image": "images/bansi.png", "desc": "Alat musik tiup tradisional khas Minangkabau yang terbuat dari bambu tipis dengan tujuh lubang nada dan ditiup secara vertikal. Bansi mampu memainkan berbagai tangga nada dengan alunan melodi melankolis yang mengiringi dendang tradisi Minang."},
+  {"word": "SAMPE", "category": "Alat Musik Tradisional", "origin": "Kalimantan Timur", "image": "images/sampe.png", "desc": "Alat musik petik tradisional berdawai dari kayu berukir khas suku Dayak Kenyah, Kayan, dan Bahau yang bentuknya menyerupai perahu. Petikan sampe menghasilkan nada repetitif yang menenangkan untuk mengiringi tarian adat serta ritual penyambutan tamu."},
+  {"word": "PIKON", "category": "Alat Musik Tradisional", "origin": "Papua Pegunungan", "image": "images/pikon.png", "desc": "Alat musik tiup sekaligus petik berukuran mungil khas suku Dani di Lembah Baliem yang dibuat dari bilah bambu dan tali serat kulit kayu. Saat ditiup sambil menarik talinya di depan rongga mulut, pikon menghasilkan suara menyerupai kicauan burung sebagai hiburan pelepas penat."},
+  {"word": "BEDUG", "category": "Alat Musik Tradisional", "origin": "Jawa & Nusantara", "image": "images/bedug.png", "desc": "Instrumen tabuh berbentuk tabung kayu besar dengan kedua sisi ditutup kulit kerbau atau sapi yang digantung di serambi masjid maupun balai adat. Selain sebagai penanda waktu ibadah dan hari raya, bedug juga menjadi bagian dari seni pertunjukan tabuh rakyat."},
+  {"word": "GUDEG", "category": "Makanan Tradisional", "origin": "Yogyakarta", "image": "images/gudeg.png", "desc": "Masakan khas Yogyakarta berbahan dasar nangka muda yang dimasak perlahan selama berjam-jam dengan santan dan bumbu tradisional hingga berwarna cokelat kemerahan. Cita rasanya yang manis gurih biasa disajikan bersama nasi, sambal goreng krecek, opor ayam, dan telur pindang."},
+  {"word": "RAWON", "category": "Makanan Tradisional", "origin": "Jawa Timur", "image": "images/rawon.png", "desc": "Masakan berkuah hitam khas Jawa Timur yang menggunakan biji kluwek sebagai bahan utama bumbu dan disajikan bersama potongan daging sapi empuk. Hidangan beraroma rempah kuat ini dilengkapi taoge pendek, telur asin, sambal terasi, dan kerupuk udang."},
+  {"word": "LAWAR", "category": "Makanan Tradisional", "origin": "Bali", "image": "images/lawar.png", "desc": "Hidangan tradisional Bali berupa campuran sayuran rebus, kelapa parut sangrai, bumbu lengkap (base genep), dan daging cincang yang memiliki ragam variasi daerah. Lawar menjadi sajian wajib dalam setiap upacara adat maupun perayaan keagamaan masyarakat Bali."},
+  {"word": "BOTOK", "category": "Makanan Tradisional", "origin": "Jawa Tengah & Jawa Timur", "image": "images/botok.png", "desc": "Makanan tradisional yang dibuat dari campuran ampas kelapa parut muda dan bumbu rempah, lalu dibungkus daun pisang dan dikukus. Isian botok sering dipadukan dengan tempe, ikan teri, atau biji lamtoro yang menghasilkan aroma kukusan harum dan gurih."},
+  {"word": "LOTEK", "category": "Makanan Tradisional", "origin": "Jawa Barat", "image": "images/lotek.png", "desc": "Hidangan sayuran rebus khas Sunda yang disajikan dengan siraman saus bumbu kacang bercita rasa gurih manis. Ciri khas lotek terletak pada penggunaan kencur, terasi, dan gula merah pada bumbunya yang disantap bersama ketupat dan kerupuk."},
+  {"word": "COMRO", "category": "Makanan Tradisional", "origin": "Jawa Barat", "image": "images/comro.png", "desc": "Kudapan tradisional Sunda berbahan singkong parut dengan isian tumisan oncom berbumbu pedas yang digoreng hingga renyah. Namanya berasal dari singkatan bahasa Sunda oncom di jero yang berarti 'oncom di dalam'."},
+  {"word": "MISRO", "category": "Makanan Tradisional", "origin": "Jawa Barat", "image": "images/misro.png", "desc": "Kudapan goreng berbahan singkong parut dengan isian irisan gula merah yang meleleh legit saat matang. Berasal dari akronim bahasa Sunda amis di jero ('manis di dalam'), misro menjadi pasangan klasik yang selalu bersanding dengan comro."},
+  {"word": "GETUK", "category": "Makanan Tradisional", "origin": "Jawa Tengah", "image": "images/getuk.png", "desc": "Makanan tradisional berbahan singkong yang dikukus, ditumbuk halus, serta diberi pemanis gula dan taburan kelapa parut. Jajanan legendaris ini memiliki tekstur kenyal lembut dengan varian terkenal seperti Getuk Trio dan Getuk Lindri."},
+  {"word": "PECEL", "category": "Makanan Tradisional", "origin": "Jawa Timur", "image": "images/pecel.png", "desc": "Hidangan aneka sayuran rebus seperti bayam, kenikir, kacang panjang, dan taoge yang disiram sambal kacang beraroma daun jeruk purut. Pecel biasa disajikan hangat di atas pincuk daun pisang bersama nasi, rempeyek kacang, dan tempe goreng."},
+  {"word": "BAGEA", "category": "Makanan Tradisional", "origin": "Maluku & Papua", "image": "images/bagea.png", "desc": "Kue tradisional bertekstur renyah di luar namun lumer di mulut yang diolah dari tepung sagu sebagai pangan pokok masyarakat Indonesia Timur. Bagea dipanggang bersama gula aren, cincangan kacang kenari, serta rempah kayu manis dan cengkih yang harum."}
+];
+const WORD_MAP = {}; WORDS.forEach(w=>WORD_MAP[w.word]=w);
+
+/* ================= KONSTANTA & STATE ================= */
+const MAX_TRIES = 6;
+const MAX_HINTS = 2;
+const POINTS = [100,85,70,55,40,25];
+const KB_ROWS = [
+  ["Q","W","E","R","T","Y","U","I","O","P"],
+  ["A","S","D","F","G","H","J","K","L"],
+  ["ENTER","Z","X","C","V","B","N","M","DEL"]
+];
+const RANK = {absent:1, present:2, correct:3};
+
+/* ================= SENSOR KATA KASAR ================= */
+const BAD_WORDS = [
+  // Indonesia
+  "ANJIR","ANJNG","ANJG","ANJING","BABI","BEGO","TOLOL","GOBLK","GOBLOK",
+  "BNGST","BANGSAT","KNTOL","KONTOL","MEMEK","NGENT","NGENTOT","PEPEK",
+  "JNCUK","JANCUK","JANCOK","ASW","ASU","SETAN","IBLIS","LONT","LONTE",
+  "PELAC","PELACUR","BAJNG","BAJINGAN","SIALAN","KAMPRET","BRENGSEK",
+  "PUKI","PUKIMAK","COLMEK","KENTU",
+  // Inggris
+  "FUCK","SHIT","BITCH","DICK","PUSSY","CUNT","PORN","SLUT","WHORE","ASSHOLE"
+];
+const SHORT_BAD_MAX = 3; // kata ≤3 huruf (ASU, ASW) hanya dicek di AWAL ketikan, supaya tidak salah deteksi seperti "BASUH"
+
+function hasProfanity(str){
+  if(!str) return false;
+  const s = str.toUpperCase();
+  return BAD_WORDS.some(w => w.length <= SHORT_BAD_MAX ? s.startsWith(w) : s.includes(w));
+}
+
+let queue = [];
+let target = null, len = 5;
+let row = 0, col = 0;
+let tiles = [];
+let guesses = [];
+let results = [];
+let keyState = {};
+let over = false, busy = false;
+let hints = {};            // {posisi: huruf}
+let hintsUsed = 0;
+let lastResult = null;
+
+const $ = (s) => document.querySelector(s);
+const boardEl = $('#board'), kbEl = $('#keyboard');
+const esc = (s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+function pickWord(){
+  if(!queue.length) queue = shuffle(WORDS.slice());
+  return queue.pop();
+}
+
+/* ================= AUDIO (Web Audio API) ================= */
+let actx = null;
+let muted = false;
+try{ muted = localStorage.getItem('lk_mute')==='1'; }catch(_){}
+function ac(){
+  if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(_){ return null; } }
+  if(actx && actx.state==='suspended') actx.resume();
+  return actx;
+}
+function tone(freq,start,dur,type='triangle',vol=.15){
+  if(muted) return;
+  const a = ac(); if(!a) return;
+  const t0 = a.currentTime + start;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.linearRampToValueAtTime(vol,t0+.015);
+  g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(t0); o.stop(t0+dur+.05);
+}
+function sfxWin(){
+  [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,i*.11,.28,'triangle',.18));
+  [1046.5,1318.5,1568].forEach((f)=>tone(f,.5,.7,'sine',.12));
+  tone(261.63,.5,.7,'triangle',.1);
+}
+function sfxLose(){
+  tone(330,0,.28,'sawtooth',.07);
+  tone(262,.25,.28,'sawtooth',.07);
+  tone(196,.5,.5,'sawtooth',.07);
+}
+function sfxClick(){
+  tone(880,0,.06,'square',.08);
+  tone(1320,.05,.09,'square',.07);
+  tone(1760,.11,.12,'sine',.08);
+}
+function sfxTick(){ tone(660,0,.05,'square',.04); }
+function updateSoundBtn(){ $('#btnSound').textContent = muted ? '🔇' : '🔊'; }
+
+/* ================= CONFETTI ================= */
+let confettiRAF = null;
+function confetti(){
+  const cv = $('#confetti'), ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = window.innerWidth*dpr; cv.height = window.innerHeight*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const colors = ['#D97706','#F59E0B','#FBBF24','#9A3412','#C2410C','#EA580C'];
+  const W = window.innerWidth, H = window.innerHeight;
+  const parts = [];
+  for(let i=0;i<170;i++){
+    const fromLeft = i%2===0;
+    parts.push({
+      x: Math.random()*W,
+      y: -20 - Math.random()*H*.5,
+      vx: (Math.random()-.5)*5,
+      vy: 2+Math.random()*4,
+      s: 6+Math.random()*8,
+      r: Math.random()*Math.PI*2,
+      vr: (Math.random()-.5)*.35,
+      c: colors[(Math.random()*colors.length)|0],
+      shape: Math.random()<.5 ? 'rect' : 'circ'
+    });
+  }
+  const start = performance.now();
+  if(confettiRAF) cancelAnimationFrame(confettiRAF);
+  function frame(now){
+    const el = now-start;
+    ctx.clearRect(0,0,W,H);
+    let alive = 0;
+    parts.forEach(p=>{
+      p.vy += .09; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.vx *= .995;
+      if(p.y < H+30){ alive++; }
+      ctx.save();
+      ctx.translate(p.x,p.y); ctx.rotate(p.r);
+      ctx.globalAlpha = Math.max(0, Math.min(1, 1 - (el-3200)/1000));
+      ctx.fillStyle = p.c;
+      if(p.shape==='rect') ctx.fillRect(-p.s/2,-p.s/4,p.s,p.s/2);
+      else{ ctx.beginPath(); ctx.arc(0,0,p.s/3,0,Math.PI*2); ctx.fill(); }
+      ctx.restore();
+    });
+    if(alive>0 && el<4300) confettiRAF = requestAnimationFrame(frame);
+    else { ctx.clearRect(0,0,W,H); confettiRAF = null; }
+  }
+  confettiRAF = requestAnimationFrame(frame);
+}
+
+/* ================= AKUN, PROFIL & PENYIMPANAN ================= */
+let currentUser = { uid:'guest', displayName:'Tamu', photoURL:'', mode:'guest' };
+let profile = defaultProfile();
+let loginPromptShown = false;
+
+/* ---------- Helper tanggal untuk Daily Streak (tanggal lokal YYYY-MM-DD) ---------- */
+function todayStr(){
+  const d = new Date();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+function dayDiff(a,b){ // selisih hari kalender b - a
+  const pa = a.split('-').map(Number), pb = b.split('-').map(Number);
+  return Math.round((Date.UTC(pb[0],pb[1]-1,pb[2]) - Date.UTC(pa[0],pa[1]-1,pa[2])) / 86400000);
+}
+
+function defaultProfile(){
+  return {currentStreak:0,maxStreak:0,lastPlayedDate:'',totalScore:0,wordsSolved:0,unlockedCards:[]};
+}
+function normalizeProfile(p){
+  const d = defaultProfile();
+  p = p || {};
+  d.currentStreak = Number(p.currentStreak)||0;
+  d.maxStreak = Number(p.maxStreak)||0;
+  d.lastPlayedDate = (typeof p.lastPlayedDate==='string' && /^\d{4}-\d{2}-\d{2}$/.test(p.lastPlayedDate)) ? p.lastPlayedDate : '';
+  d.totalScore = Number(p.totalScore)||0;
+  d.wordsSolved = Number(p.wordsSolved)||0;
+  d.unlockedCards = Array.isArray(p.unlockedCards) ? p.unlockedCards.filter(w=>WORD_MAP[w]) : [];
+  d.unlockedCards = [...new Set(d.unlockedCards)];
+  return d;
+}
+function lsGet(k){ try{return localStorage.getItem(k);}catch(_){return null;} }
+function lsSet(k,v){ try{localStorage.setItem(k,v);}catch(_){} }
+function lsDel(k){ try{localStorage.removeItem(k);}catch(_){} }
+function readLocalProfile(uid){
+  const raw = lsGet('lk_profile_'+uid);
+  if(!raw) return null;
+  try{ return normalizeProfile(JSON.parse(raw)); }catch(_){ return null; }
+}
+function isCloud(){ return fbReady && currentUser.mode==='google' && db; }
+
+async function loadProfile(){
+  const uid = currentUser.uid;
+  let p = readLocalProfile(uid);
+  if(isCloud()){
+    try{
+      const snap = await db.collection('users').doc(uid).get();
+      if(snap.exists){
+        p = normalizeProfile(snap.data());
+      }else{
+        // pertama kali login: migrasikan progres Mode Tamu bila ada
+        p = readLocalProfile('guest') || p || defaultProfile();
+        profile = p;
+        await saveProfile();
+      }
+    }catch(e){
+      console.warn('Gagal memuat profil cloud:', e);
+      toast('Gagal memuat data cloud, memakai data lokal');
+    }
+  }
+  profile = p || defaultProfile();
+  // Pengecekan otomatis saat game dibuka / login: streak hangus jika melewatkan >1 hari
+  const expired = applyStreakExpiry();
+  lsSet('lk_profile_'+uid, JSON.stringify(profile));
+  if(expired) saveProfile();
+  updateStreakUI(false);
+  updateAccountChip();
+}
+
+/* Reset streak jika selisih hari kalender > 1 (atau data lama tanpa tanggal) */
+function applyStreakExpiry(){
+  const last = profile.lastPlayedDate;
+  if(profile.currentStreak>0 && (!last || dayDiff(last, todayStr())>1)){
+    profile.currentStreak = 0;
+    return true;
+  }
+  return false;
+}
+/* Dipanggil berkala: menangkap pergantian hari saat halaman masih terbuka */
+function refreshDaily(){
+  if(applyStreakExpiry()) saveProfile();
+  updateStreakUI(false);
+}
+
+async function saveProfile(){
+  lsSet('lk_profile_'+currentUser.uid, JSON.stringify(profile));
+  if(isCloud()){
+    try{
+      const uid = currentUser.uid;
+      await db.collection('users').doc(uid).set(profile,{merge:true});
+      await db.collection('leaderboard').doc(uid).set({
+        uid,
+        displayName: currentUser.displayName || 'Pemain',
+        photoURL: currentUser.photoURL || '',
+        totalScore: profile.totalScore,
+        maxStreak: profile.maxStreak,
+        wordsSolved: profile.wordsSolved,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      },{merge:true});
+    }catch(e){
+      console.warn('Gagal sinkron ke Firestore:', e);
+      toast('Gagal sinkron ke cloud, progres tersimpan di perangkat');
+    }
+  }
+}
+
+async function setUser(u){
+  currentUser = u;
+  await loadProfile();
+}
+function guestUser(){ return { uid:'guest', displayName:'Tamu', photoURL:'', mode:'guest' }; }
+function getSimUser(){
+  const raw = lsGet('lk_sim_user');
+  if(!raw) return null;
+  try{ const u = JSON.parse(raw); if(u && u.uid) return Object.assign(u,{mode:'sim'}); }catch(_){}
+  return null;
+}
+
+function avatarHTML(u,px){
+  const size = px+'px';
+  if(u.photoURL){
+    return `<img src="${esc(u.photoURL)}" referrerpolicy="no-referrer" alt="" class="rounded-full object-cover inline-block" style="width:${size};height:${size}">`;
+  }
+  const ch = esc((u.displayName||'?').trim().charAt(0).toUpperCase() || '?');
+  return `<span class="rounded-full inline-flex items-center justify-center font-bold" style="width:${size};height:${size};font-size:${Math.round(px*.5)}px;background:#9A3412;color:#FFF7E0">${ch}</span>`;
+}
+function updateAccountChip(){
+  $('#accAvatar').innerHTML = avatarHTML(currentUser,18);
+  $('#accName').textContent = currentUser.displayName || 'Tamu';
+}
+function updateStreakUI(bump){
+  const c = $('#chipStreak');
+  $('#streakNum').textContent = profile.currentStreak;
+  const safe = profile.currentStreak>0 && profile.lastPlayedDate===todayStr();
+  c.classList.toggle('safe', safe);
+  c.classList.toggle('dim', !safe);
+  c.title = safe ? 'Streak hari ini sudah aman' : 'Selesaikan 1 ronde hari ini agar streak tidak hilang';
+  if(bump){
+    c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump');
+  }
+}
+
+async function loginGoogle(){
+  ac(); // izinkan audio setelah gestur pengguna
+  if(!fbReady){
+    // MODE SIMULASI
+    const u = { uid:'sim_'+Math.random().toString(36).slice(2,8), displayName:'Pemain Simulasi', photoURL:'' };
+    const old = getSimUser();
+    const user = old || u;
+    lsSet('lk_sim_user', JSON.stringify({uid:user.uid,displayName:user.displayName,photoURL:user.photoURL}));
+    lsSet('lk_choice','sim');
+    await setUser(Object.assign({}, user, {mode:'sim'}));
+    closeModal();
+    toast('Masuk (Mode Simulasi) sebagai '+user.displayName);
+    return;
+  }
+  try{
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await auth.signInWithPopup(provider);
+    lsSet('lk_choice','google');
+    closeModal();
+  }catch(e){
+    console.warn(e);
+    const code = e && e.code || '';
+    if(code==='auth/popup-closed-by-user' || code==='auth/cancelled-popup-request'){
+      toast('Login dibatalkan');
+    }else if(code==='auth/unauthorized-domain'){
+      toast('Domain belum diizinkan di Firebase. Memakai Mode Simulasi.',2600);
+      fbReady = false; loginGoogle();
+    }else if(code==='auth/operation-not-supported-in-this-environment' || code==='auth/web-storage-unsupported'){
+      toast('Login Google tidak didukung di sini. Memakai Mode Simulasi.',2600);
+      fbReady = false; loginGoogle();
+    }else{
+      toast('Login gagal: '+(code||'kesalahan tak dikenal'),2400);
+    }
+  }
+}
+function playAsGuest(){
+  lsSet('lk_choice','guest');
+  closeModal();
+  toast('Bermain sebagai Tamu');
+}
+async function logout(){
+  if(currentUser.mode==='google' && auth){
+    try{ await auth.signOut(); }catch(e){ console.warn(e); }
+    // onAuthStateChanged akan memasang pengguna tamu
+  }else if(currentUser.mode==='sim'){
+    lsDel('lk_sim_user');
+    await setUser(guestUser());
+  }
+  lsSet('lk_choice','guest');
+  closeModal();
+  toast('Berhasil keluar');
+}
+
+/* ---------- Hapus Akun ---------- */
+let deleting = false;
+
+function showDeleteConfirm(){
+  openModal(`
+    <div class="p-5 text-center">
+      <p class="text-4xl">⚠️</p>
+      <h2 class="title-font text-xl font-bold mt-2" style="color:#B91C1C">Hapus Akun Permanen?</h2>
+      ${DIVIDER}
+      <p class="sans text-sm text-stone-800 leading-relaxed">
+        Tindakan ini <b>tidak bisa dibatalkan</b>. Yang akan dihapus selamanya:
+      </p>
+      <ul class="sans text-sm text-stone-800 text-left mt-2 space-y-1 list-disc pl-6">
+        <li>Skor di Papan Peringkat</li>
+        <li>Streak harian &amp; rekor streak</li>
+        <li>Koleksi Kartu Budaya yang tersimpan di akun Google</li>
+        <li>Akun Loka Kata kamu</li>
+      </ul>
+      <div class="grid grid-cols-2 gap-2 mt-5">
+        <button class="btn btn-ghost" id="dCancel">Batal</button>
+        <button class="btn btn-danger" id="dDelete">Ya, Hapus Permanen</button>
+      </div>
+    </div>`);
+  $('#dCancel').onclick = closeModal;
+  $('#dDelete').onclick = deleteAccount;
+}
+
+/* Hapus dokumen cloud: leaderboard dulu, lalu profil (users). Aman dipanggil ulang. */
+async function wipeCloudData(uid){
+  await db.collection('leaderboard').doc(uid).delete();
+  await db.collection('users').doc(uid).delete();
+}
+
+async function deleteAccount(){
+  if(deleting) return;
+  const user = auth && auth.currentUser;
+  if(!user || currentUser.mode!=='google' || !db){
+    toast('Tidak ada akun Google yang sedang aktif');
+    return;
+  }
+  deleting = true;
+  const uid = user.uid;
+  const bDel = $('#dDelete'), bCan = $('#dCancel');
+  if(bDel){ bDel.disabled = true; bDel.textContent = 'Menghapus...'; }
+  if(bCan){ bCan.disabled = true; }
+
+  try{
+    try{
+      await wipeCloudData(uid);   // 1) Firestore dulu
+      await user.delete();        // 2) baru akun Auth
+    }catch(e){
+      if(e && e.code==='auth/requires-recent-login'){
+        toast('Sesi sudah lama, verifikasi ulang dengan Google...', 2500);
+        await user.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
+        await wipeCloudData(uid);
+        await user.delete();
+      }else{
+        throw e;
+      }
+    }
+
+    // Bersihkan data lokal sesi ini & kembali ke Mode Tamu
+    lsDel('lk_profile_'+uid);
+    lsSet('lk_choice','guest');
+    profile = defaultProfile();
+    await setUser(guestUser());     // aman walau onAuthStateChanged ikut berjalan
+    closeModal();
+    toast('Akun dan seluruh data berhasil dihapus', 3200);
+  }catch(e){
+    console.warn('Hapus akun gagal:', e);
+    const code = (e && e.code) || '';
+    let msg = 'Gagal menghapus akun: ' + (code || 'kesalahan tak dikenal');
+    if(code==='auth/popup-closed-by-user' || code==='auth/cancelled-popup-request')
+      msg = 'Verifikasi dibatalkan. Akun belum terhapus, silakan coba lagi.';
+    else if(code==='auth/popup-blocked')
+      msg = 'Popup diblokir browser. Izinkan popup lalu tekan Hapus Akun lagi.';
+    else if(code==='auth/user-mismatch')
+      msg = 'Pilih akun Google yang sama dengan yang sedang login.';
+    else if(code==='permission-denied')
+      msg = 'Ditolak oleh aturan Firestore. Periksa Security Rules.';
+    toast(msg, 3600);
+    if(bDel){ bDel.disabled = false; bDel.textContent = 'Ya, Hapus Permanen'; }
+    if(bCan){ bCan.disabled = false; }
+  }finally{
+    deleting = false;
+  }
+}
+
+/* ================= BUILD UI ================= */
+function buildKeyboard(){
+  kbEl.innerHTML = '';
+  KB_ROWS.forEach(r=>{
+    const div = document.createElement('div');
+    div.className = 'kb-row';
+    r.forEach(k=>{
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'key';
+      b.dataset.key = k;
+      if(k==='ENTER'){b.textContent='MASUK';b.classList.add('wide','enter');}
+      else if(k==='DEL'){b.innerHTML='HAPUS';b.classList.add('wide');}
+      else b.textContent = k;
+      b.addEventListener('click',()=>{ ac(); handleKey(k); });
+      div.appendChild(b);
+    });
+    kbEl.appendChild(div);
+  });
+}
+
+function buildBoard(){
+  boardEl.innerHTML = '';
+  const gap = 6.4;
+  const maxPx = 58;
+  const avail = Math.min(window.innerWidth, 448) - 32;
+  const size = Math.min(maxPx, Math.floor((avail - gap*(len-1))/len));
+  boardEl.style.setProperty('--size', size+'px');
+  tiles = [];
+  for(let r=0;r<MAX_TRIES;r++){
+    const rowEl = document.createElement('div');
+    rowEl.className = 'board-row';
+    rowEl.style.gridTemplateColumns = `repeat(${len}, var(--size))`;
+    rowEl.dataset.row = r;
+    const arr = [];
+    for(let c=0;c<len;c++){
+      const t = document.createElement('div');
+      t.className = 'tile';
+      rowEl.appendChild(t);
+      arr.push(t);
+    }
+    boardEl.appendChild(rowEl);
+    tiles.push(arr);
+  }
+}
+
+function resetKeyboard(){
+  keyState = {};
+  kbEl.querySelectorAll('.key').forEach(k=>k.classList.remove('correct','present','absent'));
+}
+
+/* Petunjuk huruf (hint) tampil sebagai bayangan pada baris aktif */
+function refreshGhosts(){
+  tiles.forEach((rowTiles,r)=>{
+    rowTiles.forEach((t,c)=>{
+      const active = (r===row && !over);
+      if(active && hints[c] && !t.textContent){
+        t.dataset.hint = hints[c];
+        t.classList.add('hint-ghost');
+      }else{
+        t.classList.remove('hint-ghost');
+        delete t.dataset.hint;
+      }
+    });
+  });
+}
+function updateHintBtn(){
+  const left = MAX_HINTS - hintsUsed;
+  $('#hintLeft').textContent = `· ${left}/${MAX_HINTS}`;
+  $('#btnHint').disabled = (left<=0 || over);
+}
+
+/* ================= ALUR GAME ================= */
+function newGame(){
+  target = pickWord();
+  len = target.word.length;
+  row = 0; col = 0; guesses = []; results = [];
+  over = false; busy = false;
+  hints = {}; hintsUsed = 0; lastResult = null;
+  $('#hintCat').textContent = target.category;
+  $('#hintOrigin').textContent = target.origin;
+  buildBoard();
+  resetKeyboard();
+  updateHintBtn();
+  closeModal();
+}
+
+function toast(msg, ms=1400){
+  const el = document.createElement('div');
+  el.className = 'toast-item';
+  el.textContent = msg;
+  $('#toast').appendChild(el);
+  setTimeout(()=>{el.style.transition='opacity .25s';el.style.opacity='0';setTimeout(()=>el.remove(),260);}, ms);
+}
+
+function triggerProfanity(){
+  busy = true; // blokir input selama efek berjalan
+
+  // b. efek getar pada baris aktif
+  const rowEl = boardEl.children[row];
+  rowEl.classList.remove('shake'); void rowEl.offsetWidth;
+  rowEl.classList.add('shake');
+
+  // c. kosongkan semua huruf di baris aktif
+  tiles[row].forEach(t=>{
+    t.textContent = '';
+    t.classList.remove('filled');
+  });
+  col = 0;
+  refreshGhosts();
+  sfxLose();
+
+  // a. modal peringatan
+  setTimeout(()=>{
+    busy = false;
+    openModal(`
+      <div class="p-5 text-center">
+        <p class="text-4xl">🚫</p>
+        <h2 class="title-font text-xl font-bold mt-2" style="color:#9A3412">Peringatan</h2>
+        ${DIVIDER}
+        <p class="sans text-sm text-stone-800 leading-relaxed">Kata tidak dapat digunakan karena mengandung unsur negatif.</p>
+        <button class="btn btn-new w-full mt-5" id="pfOk">Mengerti</button>
+      </div>`);
+    $('#pfOk').onclick = closeModal;
+  }, 250);
+}
+
+function handleKey(k){
+  if(over || busy || $('#overlay').classList.contains('open')) return;
+  if(k==='ENTER') return submit();
+  if(k==='DEL'){
+    if(col>0){
+      col--;
+      const t = tiles[row][col];
+      t.textContent = '';
+      t.classList.remove('filled');
+      refreshGhosts();
+    }
+    return;
+  }
+  if(/^[A-Z]$/.test(k) && col<len){
+    const t = tiles[row][col];
+    t.textContent = k;
+    t.classList.remove('filled'); void t.offsetWidth;
+    t.classList.add('filled');
+    col++;
+    refreshGhosts();
+
+// Deteksi kata kasar real-time (keyboard virtual & fisik lewat handleKey)
+    const typed = tiles[row].slice(0, col).map(x=>x.textContent).join('');
+    if(hasProfanity(typed)) triggerProfanity();
+  }
+}
+
+function evaluate(guess, answer){
+  const res = Array(guess.length).fill('absent');
+  const counts = {};
+  for(const ch of answer) counts[ch] = (counts[ch]||0)+1;
+  for(let i=0;i<guess.length;i++){
+    if(guess[i]===answer[i]){res[i]='correct';counts[guess[i]]--;}
+  }
+  for(let i=0;i<guess.length;i++){
+    if(res[i]==='correct') continue;
+    if(counts[guess[i]]>0){res[i]='present';counts[guess[i]]--;}
+  }
+  return res;
+}
+
+function submit(){
+  if(col<len){
+    const rowEl = boardEl.children[row];
+    rowEl.classList.remove('shake'); void rowEl.offsetWidth;
+    rowEl.classList.add('shake');
+    toast('Huruf belum lengkap');
+    return;
+  }
+  const guess = tiles[row].map(t=>t.textContent).join('');
+  const res = evaluate(guess, target.word);
+  guesses.push(guess); results.push(res);
+  busy = true;
+  const currentRow = row;
+  tiles[currentRow].forEach(t=>t.classList.remove('hint-ghost'));
+
+  tiles[currentRow].forEach((t,i)=>{
+    setTimeout(()=>{
+      t.classList.add('flip');
+      setTimeout(()=>{
+        t.classList.remove('filled');
+        t.classList.add(res[i]);
+      }, 300);
+    }, i*280);
+  });
+
+  const total = (len-1)*280 + 620;
+  setTimeout(()=>{
+    updateKeyboard(guess, res);
+    busy = false;
+    const won = res.every(r=>r==='correct');
+    if(won){
+      tiles[currentRow].forEach((t,i)=>setTimeout(()=>{t.classList.remove('flip');t.classList.add('bounce-win');}, i*90));
+      over = true;
+      updateHintBtn(); refreshGhosts();
+      lastResult = recordWin(currentRow+1);
+      setTimeout(()=>{
+        // selebrasi dopamin bersamaan dengan kartu edukasi
+        confetti(); sfxWin();
+        updateStreakUI(!!(lastResult.st && lastResult.st.incremented));
+        showResult(true);
+      }, 1100);
+    } else if(currentRow === MAX_TRIES-1){
+      over = true;
+      updateHintBtn(); refreshGhosts();
+      lastResult = recordLoss();
+      toast(target.word, 2000);
+      setTimeout(()=>{
+        const inc = !!(lastResult.st && lastResult.st.incremented);
+        if(inc){ confetti(); sfxWin(); } else { sfxLose(); }  // streak harian bertambah = tetap dirayakan
+        updateStreakUI(inc);
+        showResult(false);
+      }, 1400);
+    } else {
+      row++; col = 0;
+      refreshGhosts();
+    }
+  }, total);
+}
+
+function updateKeyboard(guess,res){
+  for(let i=0;i<guess.length;i++){
+    const ch = guess[i], st = res[i];
+    if(!keyState[ch] || RANK[st] > RANK[keyState[ch]]) keyState[ch] = st;
+  }
+  kbEl.querySelectorAll('.key').forEach(k=>{
+    const st = keyState[k.dataset.key];
+    if(st){k.classList.remove('correct','present','absent');k.classList.add(st);}
+  });
+}
+
+/* ================= STREAK, POIN & KOLEKSI ================= */
+/* Daily Streak: dipanggil sekali setiap ronde selesai (menang ATAU kalah) */
+function updateDailyStreak(){
+  const today = todayStr();
+  const last = profile.lastPlayedDate;
+  let status = 'same', isRecord = false;
+  if(!last){
+    profile.currentStreak = 1; status = 'started';
+  }else{
+    const d = dayDiff(last, today);
+    if(d>1){ profile.currentStreak = 1; status = 'started'; }
+    else if(d===1){ profile.currentStreak = profile.currentStreak + 1; status = 'extended'; }
+    // d<=0: hari yang sama, streak tetap
+  }
+  if(status!=='same'){
+    profile.lastPlayedDate = today;
+    if(profile.currentStreak > profile.maxStreak){ profile.maxStreak = profile.currentStreak; isRecord = true; }
+  }
+  return {status, incremented: status!=='same', streak: profile.currentStreak, isRecord};
+}
+
+function recordWin(tries){
+  const st = updateDailyStreak();
+  // Skor murni dari kecepatan tebakan; streak hanya indikator, tanpa bonus poin
+  const points = POINTS[Math.min(tries,MAX_TRIES)-1];
+  profile.totalScore += points;
+  profile.wordsSolved += 1;
+  let newCard = false;
+  if(!profile.unlockedCards.includes(target.word)){
+    profile.unlockedCards.push(target.word);
+    newCard = true;
+  }
+  saveProfile();
+  return {won:true, tries, points, streak:profile.currentStreak, st, newCard};
+}
+/* Kalah tidak mereset streak; ronde yang selesai tetap dihitung sebagai "bermain hari ini" */
+function recordLoss(){
+  const st = updateDailyStreak();
+  saveProfile();
+  return {won:false, streak:profile.currentStreak, st};
+}
+function streakBadgeHTML(r){
+  const st = r.st || {};
+  const n = r.streak || profile.currentStreak;
+  if(st.incremented){
+    return `
+      <span class="streak-badge"><span class="flame">🔥</span>Streak Harian: ${n} Hari!</span>
+      <p class="sans text-xs mt-2 text-stone-700">Kembali besok untuk mempertahankannya.</p>
+      ${st.isRecord && n>1 ? '<p class="sans text-xs font-bold mt-1" style="color:#9A3412">🏅 Rekor streak harian baru!</p>' : ''}`;
+  }
+  return `
+    <span class="streak-badge safe">✅ Streak hari ini sudah aman!</span>
+    <p class="sans text-xs mt-2 text-stone-700">🔥 ${n} Hari berjalan. Kembali besok untuk menambahnya.</p>`;
+}
+
+/* ================= SHARE ================= */
+function emojiGrid(){
+  const map = {correct:'🟩',present:'🟨',absent:'⬛'};
+  return results.map(r=>r.map(x=>map[x]).join('')).join('\n');
+}
+function shareText(won){
+  const streakLine = profile.currentStreak>0 ? `\n🔥 Streak Harian ${profile.currentStreak} Hari` : '';
+  return `Loka Kata — Tebak Budaya Nusantara\n${won? results.length : 'X'}/${MAX_TRIES}${streakLine}\n\n${emojiGrid()}`;
+}
+async function copyText(text){
+  try{
+    if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); return true; }
+    throw new Error('fallback');
+  }catch(e){
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove(); return ok;
+    }catch(_){ return false; }
+  }
+}
+
+/* ================= MODAL ================= */
+let modalCleanup = null;
+function openModal(html, cleanup){
+  if(modalCleanup){ try{modalCleanup();}catch(_){} modalCleanup = null; }
+  modalCleanup = cleanup || null;
+  $('#card').innerHTML = html;
+  $('#card').scrollTop = 0;
+  $('#overlay').classList.add('open');
+}
+function closeModal(){
+  if(modalCleanup){ try{modalCleanup();}catch(_){} modalCleanup = null; }
+  $('#overlay').classList.remove('open');
+}
+
+function ornamentSVG(won){
+  const main = won ? '#15803D' : '#9A3412';
+  return `
+  <svg viewBox="0 0 220 64" class="mx-auto w-48 h-14" aria-hidden="true">
+    <rect x="0" y="52" width="220" height="12" fill="url(#tenun)"/>
+    <g transform="translate(95,6)"><use href="#gunungan" width="30" height="40" style="color:${main}"/></g>
+    <g fill="${main}" opacity=".85">
+      <path d="M20 46 C30 40 38 40 46 46 C52 44 58 44 64 48 L64 52 L20 52 Z"/>
+      <path d="M156 48 C162 44 168 44 174 46 C182 40 190 40 200 46 L200 52 L156 52 Z"/>
+    </g>
+    <g stroke="#D97706" stroke-width="1" fill="none">
+      <path d="M70 30 Q82 20 92 30 M128 30 Q140 20 150 30"/>
+      <circle cx="82" cy="34" r="2" fill="#D97706"/><circle cx="138" cy="34" r="2" fill="#D97706"/>
+    </g>
+  </svg>`;
+}
+const DIVIDER = `<svg class="w-full h-3 my-3" viewBox="0 0 300 12" preserveAspectRatio="none"><rect width="300" height="12" fill="url(#tenun)"/></svg>`;
+
+/* ---------- Ilustrasi kartu: gambar images/ + ikon SVG cadangan per kategori ---------- */
+const CAT_ICONS = {
+  'Suku Nusantara': '<circle cx="32" cy="18" r="7"/><path d="M19 40c0-8 5-13 13-13s13 5 13 13v3H19z"/><circle cx="14" cy="26" r="5" opacity=".7"/><path d="M4 44c0-6 3-10 10-10 2 0 4 .5 5 1.2-3 2.5-4.5 5.5-4.8 8.8z" opacity=".7"/><circle cx="50" cy="26" r="5" opacity=".7"/><path d="M60 44c0-6-3-10-10-10-2 0-4 .5-5 1.2 3 2.5 4.5 5.5 4.8 8.8z" opacity=".7"/><rect x="14" y="50" width="36" height="4" rx="2"/>',
+  'Upacara Adat': '<path d="M32 6c5 7 9 11 9 17a9 9 0 0 1-18 0c0-3 1.5-5 3-7 1 3 2.5 4 4 4-1-6-1-9 2-14z"/><path d="M12 34h40l-4 6H16z"/><path d="M18 42h28l-3 10a4 4 0 0 1-4 3H25a4 4 0 0 1-4-3z"/>',
+  'Rumah Adat': '<path d="M32 5 12 20h40z"/><path d="M8 27l24-14 24 14v5H8z" opacity=".85"/><rect x="14" y="34" width="36" height="20"/><rect x="28" y="42" width="8" height="12" fill="#FFF8E6"/><rect x="8" y="54" width="48" height="4" rx="2"/>',
+  'Busana Adat': '<path d="M22 8l10 6 10-6 14 10-7 10-6-3v30H21V25l-6 3-7-10z"/><path d="M26 8c1 5 3 8 6 8s5-3 6-8" fill="none" stroke="#FFF8E6" stroke-width="2"/>',
+  'Kain Tradisional': '<rect x="8" y="10" width="48" height="44" rx="3"/><path d="M32 14l14 18-14 18-14-18z" fill="#FFF8E6"/><path d="M32 22l7 10-7 10-7-10z"/><path d="M8 18h48M8 46h48" stroke="#FFF8E6" stroke-width="2" fill="none"/>',
+  'Alat Musik Tradisional': '<rect x="8" y="8" width="5" height="50" rx="2"/><rect x="51" y="8" width="5" height="50" rx="2"/><rect x="8" y="8" width="48" height="5" rx="2"/><circle cx="32" cy="34" r="16"/><circle cx="32" cy="34" r="6" fill="#FFF8E6"/><circle cx="32" cy="34" r="2.5"/>',
+  'Makanan Tradisional': '<path d="M24 6c-3 4 3 6 0 10M32 4c-3 4 3 6 0 10M40 6c-3 4 3 6 0 10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M8 28h48a24 22 0 0 1-48 0z"/><rect x="20" y="52" width="24" height="5" rx="2.5"/>',
+  'Lainnya': '<path d="M32 6l7 16 17 2-13 11 4 17-15-9-15 9 4-17L8 24l17-2z"/>'
+};
+function catIconSVG(group){
+  const body = CAT_ICONS[group] || CAT_ICONS['Lainnya'];
+  return `<svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">${body}</svg>`;
+}
+/* Jika file gambar belum ada: sembunyikan <img>, tampilkan ikon SVG kategori (tanpa ikon gambar rusak) */
+function imgFallback(img){
+  img.onerror = null;
+  img.style.display = 'none';
+  const fb = img.nextElementSibling;
+  if(fb) fb.style.display = 'flex';
+}
+function cardImageHTML(w){
+  const alt = esc(w.word + ' — ' + (w.group||''));
+  return `<div class="cimg">
+    <img src="${esc(w.image||'')}" alt="${alt}" loading="lazy" decoding="async" onerror="imgFallback(this)">
+    <div class="cfb" role="img" aria-label="${alt}">${catIconSVG(w.group)}</div>
+  </div>`;
+}
+
+function showResult(won){
+  const r = lastResult || {};
+  const miniGrid = emojiGrid();
+  let extra = '';
+  if(won){
+    extra = `
+      <div class="text-center mt-3">
+        ${streakBadgeHTML(r)}
+        <p class="sans text-xs mt-2 text-stone-700">+${r.points||0} poin <span class="text-stone-500">(menebak di percobaan ke-${r.tries})</span></p>
+        ${r.newCard ? '<p class="sans text-xs font-bold mt-1" style="color:#15803D">📜 Kartu Budaya baru terbuka di koleksimu!</p>' : '<p class="sans text-xs mt-1 text-stone-500">Kartu ini sudah ada di koleksimu.</p>'}
+      </div>`;
+  }else{
+    extra = `
+      <div class="text-center mt-3">
+        ${streakBadgeHTML(r)}
+        <p class="sans text-xs mt-2 text-stone-700">Kata belum tertebak, tapi streak harianmu tidak hangus. Coba kata lain!</p>
+      </div>`;
+  }
+  openModal(`
+    <div class="p-5">
+      <div class="text-center">
+        ${ornamentSVG(won)}
+        ${cardImageHTML(target)}
+        <p class="sans text-xs uppercase tracking-[.25em] mt-2 ${won?'text-green-800':'text-orange-900'} font-bold">${won?'Menang — Sugeng Rawuh!':'Kesempatan Habis'}</p>
+        <h2 class="title-font text-4xl font-bold mt-1" style="color:#9A3412">${target.word}</h2>
+        <p class="sans text-xs mt-1 text-stone-700"><b>Asal:</b> ${target.origin}</p>
+        <p class="sans text-[.68rem] mt-1 inline-block px-2 py-[2px] rounded-full bg-amber-700/15 text-amber-900 font-semibold">${target.category}</p>
+      </div>
+      ${extra}
+      ${DIVIDER}
+      <p class="text-[.95rem] leading-relaxed text-stone-800 text-center">${target.desc}</p>
+      <div class="text-center mt-4 emoji-grid" aria-label="Hasil tebakan">${miniGrid.split('\n').join('<br>')}</div>
+      <div class="grid grid-cols-2 gap-2 mt-5">
+        <button class="btn btn-share" id="mShare">Bagikan Hasil</button>
+        <button class="btn btn-new" id="mNew">Main Kata Lain</button>
+        <button class="btn btn-gold" id="mRank">🏆 Peringkat</button>
+        <button class="btn btn-gold" id="mCards">📜 Kartu</button>
+      </div>
+      <button class="btn btn-ghost w-full mt-2" id="mClose">Tutup</button>
+    </div>`);
+  $('#mShare').onclick = async ()=>{
+    const ok = await copyText(shareText(won));
+    toast(ok ? 'Hasil disalin ke clipboard!' : 'Gagal menyalin, salin manual ya.');
+  };
+  $('#mNew').onclick = newGame;
+  $('#mRank').onclick = showLeaderboard;
+  $('#mCards').onclick = showGallery;
+  $('#mClose').onclick = closeModal;
+}
+
+function showHelp(){
+  openModal(`
+    <div class="p-5">
+      <h2 class="title-font text-2xl font-bold text-center" style="color:#9A3412">Cara Bermain</h2>
+      ${DIVIDER}
+      <p class="sans text-sm text-stone-800 leading-relaxed">Tebak kata rahasia bertema budaya Nusantara dalam <b>6 kesempatan</b>. Jumlah kotak mengikuti panjang kata. Gunakan petunjuk <b>Kategori</b> dan <b>Asal Daerah</b> di atas papan.</p>
+      <div class="sans text-sm mt-3 space-y-2">
+        <div class="flex items-center gap-3"><span class="inline-flex w-8 h-8 rounded items-center justify-center font-bold text-white" style="background:#15803D">A</span><span>Hijau — huruf dan posisi tepat.</span></div>
+        <div class="flex items-center gap-3"><span class="inline-flex w-8 h-8 rounded items-center justify-center font-bold" style="background:#D97706;color:#1C1411">B</span><span>Kuning — huruf ada, posisi salah.</span></div>
+        <div class="flex items-center gap-3"><span class="inline-flex w-8 h-8 rounded items-center justify-center font-bold text-stone-200" style="background:#3F3A36">C</span><span>Abu-abu — huruf tidak ada.</span></div>
+      </div>
+      <div class="sans text-xs text-stone-700 mt-4 space-y-1 leading-relaxed">
+        <p>🔥 <b>Streak Harian:</b> selesaikan minimal 1 ronde setiap hari. Kalah tidak mereset streak, tetapi melewatkan 1 hari penuh akan menghanguskannya. Streak hanya penanda keaktifan dan tidak menambah poin.</p>
+        <p>🎯 <b>Poin:</b> tebakan ke-1 = 100, ke-2 = 85, ke-3 = 70, ke-4 = 55, ke-5 = 40, ke-6 = 25.</p>
+        <p>💡 <b>Hint:</b> tonton iklan 5 detik untuk membuka 1 huruf (maks. ${MAX_HINTS}x per ronde).</p>
+        <p>📜 <b>Kartu:</b> setiap kata yang berhasil ditebak menjadi koleksi kartu budayamu.</p>
+      </div>
+      <button class="btn btn-new w-full mt-5" id="hClose">Mulai Main</button>
+    </div>`);
+  $('#hClose').onclick = closeModal;
+}
+
+/* ---------- Login / Akun ---------- */
+const G_ICON = `<svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>`;
+
+function showLogin(){
+  const sim = !fbReady;
+  openModal(`
+    <div class="p-5 text-center">
+      ${ornamentSVG(true)}
+      <h2 class="title-font text-2xl font-bold mt-2" style="color:#9A3412">Sugeng Rawuh!</h2>
+      <p class="sans text-sm text-stone-700 mt-1">Masuk untuk menyimpan streak, koleksi kartu budaya, dan ikut papan peringkat Nusantara.</p>
+      ${DIVIDER}
+      <div class="flex flex-col gap-2">
+        <button class="btn btn-google" id="lGoogle">${G_ICON}<span>Masuk dengan Google</span></button>
+        <button class="btn btn-new" id="lGuest">Main sebagai Tamu</button>
+      </div>
+      <p class="sans text-[.7rem] text-stone-600 mt-3 leading-relaxed">${sim
+        ? '⚠️ <b>Mode Simulasi aktif</b>: login Google disimulasikan dan data disimpan di perangkat ini. Di situs yang sudah di-deploy dengan Firebase, login Google asli akan berjalan otomatis.'
+        : 'Mode Tamu menyimpan progres di perangkat ini saja dan tidak masuk peringkat resmi.'}</p>
+    </div>`);
+  $('#lGoogle').onclick = loginGoogle;
+  $('#lGuest').onclick = playAsGuest;
+}
+
+function showAccount(){
+  const u = currentUser;
+  const modeLabel = u.mode==='google' ? 'Akun Google' : (u.mode==='sim' ? 'Akun Simulasi (lokal)' : 'Mode Tamu');
+  openModal(`
+    <div class="p-5">
+      <div class="text-center">
+        <div class="inline-block">${avatarHTML(u,64)}</div>
+        <h2 class="title-font text-xl font-bold mt-2" style="color:#9A3412">${esc(u.displayName||'Tamu')}</h2>
+        <p class="sans text-xs text-stone-600">${modeLabel}${(!fbReady && u.mode!=='guest') ? ' · Mode Simulasi' : ''}</p>
+      </div>
+      ${DIVIDER}
+      <div class="grid grid-cols-2 gap-2 sans text-center">
+        <div class="rounded-lg bg-white/50 p-2"><div class="text-xl font-extrabold" style="color:#9A3412">${profile.totalScore}</div><div class="text-[.65rem] uppercase tracking-wider text-stone-600">Total Poin</div></div>
+        <div class="rounded-lg bg-white/50 p-2"><div class="text-xl font-extrabold" style="color:#9A3412">🔥 ${profile.currentStreak} Hari</div><div class="text-[.65rem] uppercase tracking-wider text-stone-600">Streak Harian</div></div>
+        <div class="rounded-lg bg-white/50 p-2"><div class="text-xl font-extrabold" style="color:#9A3412">${profile.maxStreak} Hari</div><div class="text-[.65rem] uppercase tracking-wider text-stone-600">Rekor Streak</div></div>
+        <div class="rounded-lg bg-white/50 p-2"><div class="text-xl font-extrabold" style="color:#9A3412">${profile.wordsSolved}</div><div class="text-[.65rem] uppercase tracking-wider text-stone-600">Kata Terselesaikan</div></div>
+      </div>
+            <div class="flex flex-col gap-2 mt-4">
+        ${u.mode==='guest'
+          ? `<button class="btn btn-google" id="aGoogle">${G_ICON}<span>Masuk dengan Google</span></button>`
+          : `<button class="btn btn-new" id="aLogout">Keluar</button>`}
+        ${u.mode==='google'
+          ? `<button class="btn btn-danger" id="aDelete">🗑️ Hapus Akun</button>`
+          : ''}
+        <button class="btn btn-ghost" id="aClose">Tutup</button>
+      </div>
+    </div>`);
+  if($('#aGoogle')) $('#aGoogle').onclick = loginGoogle;
+  if($('#aLogout')) $('#aLogout').onclick = logout;
+  if($('#aDelete')) $('#aDelete').onclick = showDeleteConfirm;
+  $('#aClose').onclick = closeModal;
+}
+
+/* ---------- Hint dengan Iklan Berhadiah ---------- */
+function showAd(){
+  if(over || busy) return;
+  if(hintsUsed>=MAX_HINTS){ toast('Hint ronde ini sudah habis'); return; }
+  const facts = [
+    {t:'Tahukah kamu?', b:'Batik Indonesia diakui UNESCO sebagai Warisan Budaya Takbenda pada 2 Oktober 2009.'},
+    {t:'Tahukah kamu?', b:'Subak, sistem irigasi tradisional Bali, ditetapkan UNESCO sebagai Warisan Dunia pada 2012.'},
+    {t:'Tahukah kamu?', b:'Wayang Indonesia diakui UNESCO sebagai Mahakarya Warisan Lisan dan Takbenda Manusia pada 2003.'}
+  ];
+  const f = facts[(Math.random()*facts.length)|0];
+  const TOTAL = 5;
+  let left = TOTAL, timer = null;
+
+  openModal(`
+    <div class="p-5">
+      <h2 class="title-font text-xl font-bold text-center" style="color:#9A3412">Iklan Berhadiah</h2>
+      <p class="sans text-xs text-center text-stone-600 mt-1" id="adMsg">Tonton iklan selama ${TOTAL} detik untuk membuka 1 huruf petunjuk...</p>
+      <!-- ============================================================
+           SLOT IKLAN BERHADIAH (REWARDED AD)
+           Tempel skrip Google AdSense / jaringan iklan asli di dalam
+           <div id="adSlot"> di bawah ini. Contoh AdSense:
+             <ins class="adsbygoogle" style="display:block"
+                  data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+                  data-ad-slot="XXXXXXXXXX" data-ad-format="auto"></ins>
+             <script>(adsbygoogle = window.adsbygoogle || []).push({});<\/script>
+           Untuk iklan berhadiah sungguhan, panggil fungsi claimHint()
+           dari callback "reward granted" milik SDK iklan Anda.
+           Konten di bawah ini hanyalah banner edukasi placeholder.
+           ============================================================ -->
+      <div class="ad-slot mt-3" id="adSlot">
+        <span class="ad-label">IKLAN · PLACEHOLDER</span>
+        <div class="w-full p-4 text-center">
+          <svg viewBox="0 0 300 70" class="w-full h-16" aria-hidden="true">
+            <rect width="300" height="70" rx="6" fill="url(#parangP)" opacity=".9"/>
+            <rect x="0" y="28" width="300" height="14" fill="#1C1411" opacity=".8"/>
+            <g transform="translate(138,6)"><use href="#gunungan" width="24" height="30" style="color:#D97706"/></g>
+            <rect y="56" width="300" height="14" fill="url(#tenun)"/>
+          </svg>
+          <p class="sans text-[.7rem] font-bold uppercase tracking-widest mt-2" style="color:#15803D">${f.t}</p>
+          <p class="text-sm text-stone-800 mt-1 leading-snug">${f.b}</p>
+        </div>
+      </div>
+      <div class="progress mt-4"><div id="adBar" style="width:0%"></div></div>
+      <p class="sans text-center text-sm font-bold mt-2" style="color:#9A3412"><span id="adCount">${TOTAL}</span> detik</p>
+      <div class="flex flex-col gap-2 mt-3">
+        <button class="btn btn-new" id="adClaim" disabled>Klaim Hint Sekarang</button>
+        <button class="btn btn-ghost" id="adCancel">Batal</button>
+      </div>
+    </div>`, ()=>{ if(timer) clearInterval(timer); });
+
+  $('#adCancel').onclick = closeModal;
+  $('#adClaim').onclick = ()=>{ closeModal(); claimHint(); };
+  timer = setInterval(()=>{
+    left--;
+    sfxTick();
+    $('#adCount').textContent = Math.max(left,0);
+    $('#adBar').style.width = ((TOTAL-left)/TOTAL*100)+'%';
+    if(left<=0){
+      clearInterval(timer); timer = null;
+      $('#adMsg').textContent = 'Terima kasih sudah menonton! Hint siap diklaim.';
+      $('#adClaim').disabled = false;
+    }
+  },1000);
+}
+
+function claimHint(){
+  if(over || hintsUsed>=MAX_HINTS) return;
+  const known = new Set();
+  results.forEach(r=>r.forEach((x,i)=>{ if(x==='correct') known.add(i); }));
+  const cand = [];
+  for(let i=0;i<len;i++){
+    if(!known.has(i) && !(i in hints)) cand.push(i);
+  }
+  if(!cand.length){ toast('Semua huruf sudah terungkap!'); return; }
+  const idx = cand[(Math.random()*cand.length)|0];
+  hints[idx] = target.word[idx];
+  hintsUsed++;
+  sfxClick();
+  updateHintBtn();
+  refreshGhosts();
+  toast(`💡 Hint: huruf ke-${idx+1} adalah "${hints[idx]}"`, 2800);
+  // sorot kotak yang dimaksud
+  const t = tiles[row] && tiles[row][idx];
+  if(t){ t.classList.remove('bounce-win'); void t.offsetWidth; t.classList.add('bounce-win'); }
+}
+
+/* ---------- Papan Peringkat (hanya data asli Firestore, hanya akun Google) ---------- */
+let lbUnsub = null;
+
+function renderLb(list){
+  const el = $('#lbList');
+  if(!el) return;
+  if(!list.length){
+    el.innerHTML = '<p class="sans text-center text-sm text-stone-600 py-6">Belum ada pemain di papan peringkat. Selesaikan satu kata untuk menjadi yang pertama! 🏆</p>';
+    return;
+  }
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = list.map((p,i)=>{
+    const me = p.uid===currentUser.uid;
+    return `<div class="lb-row ${me?'me':''}">
+      <div class="lb-rank">${i<3?medals[i]:(i+1)}</div>
+      ${avatarHTML(p,32)}
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-bold truncate">${esc(p.displayName||'Pemain')}${me?' <span class="text-[.6rem] font-bold px-1.5 py-[1px] rounded-full" style="background:#9A3412;color:#fff">KAMU</span>':''}</div>
+        <div class="text-[.65rem] text-stone-600">${p.wordsSolved||0} kata · 🔥 rekor ${p.maxStreak||0}</div>
+      </div>
+      <div class="text-right"><div class="text-base font-extrabold" style="color:#9A3412">${p.totalScore||0}</div><div class="text-[.55rem] uppercase tracking-wider text-stone-500">poin</div></div>
+    </div>`;
+  }).join('');
+}
+
+function showLeaderboard(){
+  const isGoogle = currentUser.mode==='google' && fbReady && db;
+  const header = `
+      <div class="text-center">
+        <svg viewBox="0 0 24 30" class="w-7 h-8 mx-auto" style="color:#D97706"><use href="#gunungan"/></svg>
+        <h2 class="title-font text-2xl font-bold" style="color:#9A3412">Papan Peringkat Nusantara</h2>
+      </div>
+      ${DIVIDER}`;
+
+  // Mode Tamu: tidak ada data peringkat, hanya ajakan login
+  if(currentUser.mode==='guest'){
+    openModal(`
+    <div class="p-5">
+      ${header}
+      <div class="text-center py-2">
+        <p class="text-3xl">🏆</p>
+        <p class="sans text-sm text-stone-800 mt-2 leading-relaxed">Papan peringkat khusus pemain yang masuk dengan <b>Akun Google</b>. Skor Mode Tamu tidak disimpan ke peringkat.</p>
+        <p class="sans text-xs text-stone-600 mt-2">Masuk sekarang untuk mencatat skormu dan bersaing dengan pemain lain se-Nusantara.</p>
+        <button class="btn btn-google w-full mt-4" id="lbGoogle">${G_ICON}<span>Masuk dengan Google</span></button>
+      </div>
+      <button class="btn btn-ghost w-full mt-3" id="lbClose">Tutup</button>
+    </div>`);
+    $('#lbGoogle').onclick = loginGoogle;
+    $('#lbClose').onclick = closeModal;
+    return;
+  }
+
+  // Login simulasi (Firebase tidak aktif): tidak ada data asli yang bisa ditampilkan
+  if(!isGoogle){
+    openModal(`
+    <div class="p-5">
+      ${header}
+      <p class="sans text-sm text-center text-stone-700 py-4 leading-relaxed">Papan peringkat hanya menampilkan data asli dari Akun Google. Fitur ini aktif di situs yang sudah di-deploy dengan Firebase, bukan di Mode Simulasi.</p>
+      <button class="btn btn-ghost w-full mt-2" id="lbClose">Tutup</button>
+    </div>`);
+    $('#lbClose').onclick = closeModal;
+    return;
+  }
+
+  openModal(`
+    <div class="p-5">
+      ${header.replace('</div>',`<p class="sans text-[.7rem] text-stone-600 mt-1">Top 20 pemain Akun Google berdasarkan total poin · langsung (real-time)</p></div>`)}
+      <div id="lbList" class="flex flex-col gap-1.5"><p class="sans text-center text-sm text-stone-600 py-6">Memuat peringkat...</p></div>
+      <p class="sans text-[.65rem] text-center text-stone-500 mt-3 leading-relaxed">Poin kemenangan: tebakan ke-1 = 100, ke-2 = 85, ke-3 = 70, ke-4 = 55, ke-5 = 40, ke-6 = 25. Streak tidak menambah poin.</p>
+      <button class="btn btn-ghost w-full mt-4" id="lbClose">Tutup</button>
+    </div>`, ()=>{ if(lbUnsub){ try{lbUnsub();}catch(_){} lbUnsub = null; } });
+  $('#lbClose').onclick = closeModal;
+
+  try{
+    lbUnsub = db.collection('leaderboard').orderBy('totalScore','desc').limit(20).onSnapshot(
+      snap=>{
+        const real = snap.docs.map(d=>Object.assign({uid:d.id}, d.data()));
+        renderLb(real);
+      },
+      err=>{
+        console.warn('Leaderboard error:', err);
+        const el = $('#lbList');
+        if(el) el.innerHTML = '<p class="sans text-center text-sm text-stone-600 py-6">Gagal memuat peringkat. Periksa koneksi atau aturan Firestore, lalu coba lagi.</p>';
+      }
+    );
+  }catch(e){
+    console.warn(e);
+    const el = $('#lbList');
+    if(el) el.innerHTML = '<p class="sans text-center text-sm text-stone-600 py-6">Gagal memuat peringkat.</p>';
+  }
+}
+
+/* ---------- Galeri Kartu Budaya ---------- */
+function miniOrnament(){
+  return `<svg viewBox="0 0 60 26" class="w-14 h-6" aria-hidden="true">
+    <rect y="18" width="60" height="8" fill="url(#tenun)"/>
+    <g transform="translate(24,0)"><use href="#gunungan" width="12" height="17" style="color:#9A3412"/></g>
+    <rect x="0" y="0" width="14" height="16" fill="url(#kawungP)" opacity=".8"/>
+    <rect x="46" y="0" width="14" height="16" fill="url(#kawungP)" opacity=".8"/>
+  </svg>`;
+}
+const LOCK_SVG = `<svg viewBox="0 0 24 24" class="w-8 h-8" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19.5v-8A1.5 1.5 0 0 1 5.5 10H7Zm2 0h6V7a3 3 0 0 0-6 0v3Zm3 4a1.6 1.6 0 0 0-.8 3v1.5h1.6V17a1.6 1.6 0 0 0-.8-3Z" fill="#6b5f48"/></svg>`;
+
+const GALLERY_TABS = ['Semua','Suku Nusantara','Upacara Adat','Rumah Adat','Busana Adat','Kain Tradisional','Alat Musik Tradisional','Makanan Tradisional'];
+let galleryTab = 'Semua';
+
+function galleryGroups(){
+  // urutan sesuai tab; kartu yang grup-nya di luar daftar tab dikumpulkan di "Lainnya"
+  const names = GALLERY_TABS.slice(1);
+  const map = {}; names.forEach(g=>map[g]=[]);
+  const extra = [];
+  WORDS.forEach(w=>{ if(map[w.category]) map[w.category].push(w); else extra.push(w); });
+  const groups = names.map(g=>({name:g, words:map[g]}));
+  if(extra.length) groups.push({name:'Lainnya', words:extra});
+  return groups;
+}
+function galleryCardHTML(w, unlocked){
+  if(unlocked.has(w.word)){
+    return `<button type="button" class="gcard" data-w="${w.word}">
+        ${miniOrnament()}
+        <span class="w">${w.word}</span>
+        <span class="o">${esc(w.origin)}</span>
+      </button>`;
+  }
+  return `<div class="gcard locked" aria-label="Kartu terkunci">
+      ${LOCK_SVG}
+      <span class="w">???</span>
+    </div>`;
+}
+function renderGalleryBody(){
+  const unlocked = new Set(profile.unlockedCards);
+  const groups = galleryGroups();
+  const shown = galleryTab==='Semua' ? groups : groups.filter(g=>g.name===galleryTab);
+  $('#gBody').innerHTML = shown.map(g=>{
+    const got = g.words.filter(w=>unlocked.has(w.word)).length;
+    const grid = g.words.length
+      ? `<div class="grid grid-cols-3 gap-2">${g.words.map(w=>galleryCardHTML(w,unlocked)).join('')}</div>`
+      : '<div class="gempty">Belum ada kartu di kategori ini.</div>';
+    return `<h3 class="ghead">${esc(g.name)} (${got}/${g.words.length})</h3>${grid}`;
+  }).join('') || '<div class="gempty">Belum ada kartu.</div>';
+  document.querySelectorAll('#gTabs .gtab').forEach(t=>{
+    const on = t.dataset.tab===galleryTab;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('#gBody [data-w]').forEach(b=>{
+    b.onclick = ()=>showCardDetail(b.dataset.w);
+  });
+}
+function showGallery(){
+  const unlocked = new Set(profile.unlockedCards);
+  const n = unlocked.size, total = WORDS.length;
+  const pct = Math.round(n/total*100);
+  const tabNames = GALLERY_TABS.slice();
+  if(galleryGroups().some(g=>g.name==='Lainnya')) tabNames.push('Lainnya');
+  if(!tabNames.includes(galleryTab)) galleryTab = 'Semua';
+  openModal(`
+    <div class="p-5">
+      <div class="text-center">
+        <h2 class="title-font text-2xl font-bold" style="color:#9A3412">Galeri Kartu Budaya</h2>
+        <p class="sans text-sm font-bold mt-1" style="color:#15803D">Terkumpul: ${n} / ${total} Kartu Budaya</p>
+      </div>
+      <div class="progress mt-2"><div style="width:${pct}%"></div></div>
+      ${DIVIDER}
+      <div class="gtabs" id="gTabs" role="tablist" aria-label="Filter kategori kartu">
+        ${tabNames.map(t=>`<button type="button" class="gtab" role="tab" data-tab="${esc(t)}">${esc(t)}</button>`).join('')}
+      </div>
+      <div id="gBody" class="mt-1"></div>
+      <p class="sans text-[.68rem] text-center text-stone-600 mt-3">Tebak kata dengan benar untuk membuka kartunya. Ketuk kartu terbuka untuk membaca filosofinya.</p>
+      <button class="btn btn-ghost w-full mt-3" id="gClose">Tutup</button>
+    </div>`);
+  $('#gClose').onclick = closeModal;
+  document.querySelectorAll('#gTabs .gtab').forEach(t=>{
+    t.onclick = ()=>{ galleryTab = t.dataset.tab; renderGalleryBody(); $('#gBody').scrollIntoView({block:'nearest'}); };
+  });
+  renderGalleryBody();
+  const act = document.querySelector('#gTabs .gtab.active');
+  if(act && act.scrollIntoView) act.scrollIntoView({inline:'center', block:'nearest'});
+}
+function showCardDetail(word){
+  const w = WORD_MAP[word];
+  if(!w) return;
+  openModal(`
+    <div class="p-5">
+      <div class="text-center">
+        ${ornamentSVG(true)}
+        ${cardImageHTML(w)}
+        <p class="sans text-[.65rem] uppercase tracking-[.25em] mt-2 font-bold text-green-800">Kartu Budaya Nusantara</p>
+        <h2 class="title-font text-4xl font-bold mt-1" style="color:#9A3412">${w.word}</h2>
+        <p class="sans text-xs mt-1 text-stone-700"><b>Asal:</b> ${esc(w.origin)}</p>
+        <p class="sans text-[.68rem] mt-1 inline-block px-2 py-[2px] rounded-full bg-amber-700/15 text-amber-900 font-semibold">${esc(w.group||w.category)}</p>
+      </div>
+      ${DIVIDER}
+      <p class="text-[.95rem] leading-relaxed text-stone-800 text-center">${esc(w.desc)}</p>
+      <div class="grid grid-cols-2 gap-2 mt-5">
+        <button class="btn btn-gold" id="cBack">← Galeri</button>
+        <button class="btn btn-ghost" id="cClose">Tutup</button>
+      </div>
+    </div>`);
+  $('#cBack').onclick = showGallery;
+  $('#cClose').onclick = closeModal;
+}
+
+/* ================= EVENTS ================= */
+document.addEventListener('keydown', (e)=>{
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  if(e.key === 'Enter'){ e.preventDefault(); handleKey('ENTER'); }
+  else if(e.key === 'Backspace'){ e.preventDefault(); handleKey('DEL'); }
+  else if(/^[a-zA-Z]$/.test(e.key)){ handleKey(e.key.toUpperCase()); }
+  else if(e.key === 'Escape'){ closeModal(); }
+});
+$('#overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeModal(); });
+$('#btnHelp').addEventListener('click', ()=>{ ac(); showHelp(); });
+$('#btnRank').addEventListener('click', ()=>{ ac(); showLeaderboard(); });
+$('#btnCards').addEventListener('click', ()=>{ ac(); showGallery(); });
+$('#btnAccount').addEventListener('click', ()=>{ ac(); showAccount(); });
+$('#btnHint').addEventListener('click', ()=>{ ac(); showAd(); });
+$('#btnSound').addEventListener('click', ()=>{
+  muted = !muted;
+  lsSet('lk_mute', muted?'1':'0');
+  updateSoundBtn();
+  if(!muted) sfxClick();
+});
+$('#btnNew').addEventListener('click', ()=>{
+  ac();
+  if(!over && guesses.length>0){
+    // ronde yang ditinggalkan tidak dihitung selesai dan tidak mengubah streak harian
+    if(!confirm('Ganti ke kata lain? Ronde saat ini akan dihentikan dan tidak dihitung.')) return;
+  }
+  newGame();
+});
+
+let rz;
+window.addEventListener('resize', ()=>{
+  clearTimeout(rz);
+  rz = setTimeout(()=>{
+    if(!target || busy) return;
+    const snapshot = tiles.map(r=>r.map(t=>({txt:t.textContent, cls:[...t.classList].filter(c=>['correct','present','absent','filled'].includes(c))})));
+    buildBoard();
+    snapshot.forEach((r,ri)=>r.forEach((s,ci)=>{
+      const t = tiles[ri][ci]; t.textContent = s.txt; s.cls.forEach(c=>t.classList.add(c));
+      t.classList.remove('filled');
+    }));
+    refreshGhosts();
+  }, 150);
+});
+
+/* ================= INIT ================= */
+// Pantau pergantian hari (tengah malam) saat halaman terbuka / tab kembali aktif
+setInterval(refreshDaily, 30000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshDaily(); });
+window.addEventListener('focus', refreshDaily);
+
+buildKeyboard();
+updateSoundBtn();
+newGame();
+updateAccountChip();
+updateStreakUI(false);
+
+function promptLoginIfFirstVisit(){
+  if(loginPromptShown) return;
+  loginPromptShown = true;
+  if(currentUser.mode==='guest' && !lsGet('lk_choice')){
+    setTimeout(showLogin, 350);
+  }
+}
+
+fbReady = initFirebase();
+if(fbReady){
+  let first = true;
+  auth.onAuthStateChanged(async (u)=>{
+    if(u){
+      lsSet('lk_choice','google');
+      await setUser({uid:u.uid, displayName:u.displayName||'Pemain', photoURL:u.photoURL||'', mode:'google'});
+      if(first){ toast('Selamat datang, '+(u.displayName||'Pemain')+'!'); }
+    }else{
+      await setUser(guestUser());
+    }
+    if(first){ first = false; promptLoginIfFirstVisit(); }
+  });
+}else{
+  (async ()=>{
+    const sim = getSimUser();
+    await setUser(sim || guestUser());
+    promptLoginIfFirstVisit();
+  })();
+}
+</script>
+</body>
+</html>
